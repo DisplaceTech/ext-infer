@@ -8,6 +8,13 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
+  # Opt every JavaScript-based action into the Node 24 runtime ahead of
+  # GitHub's June 2026 forced cut-over. `actions/checkout@v4` and the
+  # rust-toolchain / setup-php / rust-cache actions all still ship Node
+  # 20 bundles; without this, each run emits a "Node.js 20 actions are
+  # deprecated" warning per leg. Once the upstream actions ship Node-24
+  # bundles natively, this line can drop.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
   lint:
