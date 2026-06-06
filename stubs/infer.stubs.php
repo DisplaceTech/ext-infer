@@ -21,6 +21,43 @@ class InferenceException extends \Displace\Infer\InferException
 }
 
 /**
+ * Single embedding vector produced by `Model::embed()`.
+ *
+ * Read-only. Carries the float vector plus a small amount of vector math
+ * (dimensionality, L2 norm, unit-length normalization, cosine similarity).
+ * Direct construction is refused — a vector built by PHP would lie about
+ * which model produced it and what pooling strategy was applied.
+ */
+final class Embedding
+{
+    /** @throws \Displace\Infer\InferException Always. */
+    public function __construct() {}
+
+    /**
+     * The embedding as a flat array of floats. Length matches `dimensions()`.
+     *
+     * @return list<float>
+     */
+    public function vector(): array {}
+
+    /** Vector length — the loaded model's `n_embd`. */
+    public function dimensions(): int {}
+
+    /** L2 norm of the vector. */
+    public function norm(): float {}
+
+    /** Return a new Embedding scaled to unit length (zero-vectors are returned unchanged). */
+    public function normalize(): self {}
+
+    /**
+     * Cosine similarity against another embedding.
+     *
+     * @throws \Displace\Infer\InferenceException If the two vectors have different dimensions.
+     */
+    public function cosineSimilarity(\Displace\Infer\Embedding $other): float {}
+}
+
+/**
  * Result of a `Model::chat()` call.
  *
  * Reasoning-model output (Qwen3, DeepSeek R1, ...) is split into the
@@ -178,6 +215,22 @@ class Model
         int $seed = 1234,
         bool $addBos = true,
     ): string {}
+
+    /**
+     * Generate an embedding vector for a single text.
+     *
+     * Requires the model to have been loaded with `['embedding' => true]`.
+     * Pooling defaults to whatever the GGUF metadata declares, which is
+     * correct for purpose-built embedding models (BGE, E5, GTE,
+     * Qwen3-Embedding, …); override via `['pooling' => 'mean'|'cls'|'last'|…]`
+     * on `Model::load()` if a model ships without the metadata.
+     *
+     * @throws \Displace\Infer\InferenceException If the model was not loaded with
+     *                                            `embedding: true`, if the model
+     *                                            has been closed, or if encoding
+     *                                            fails.
+     */
+    public function embed(string $text): \Displace\Infer\Embedding {}
 
     /**
      * Release the underlying model weights. Idempotent.

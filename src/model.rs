@@ -44,13 +44,14 @@ use ext_php_rs::convert::FromZval;
 use ext_php_rs::prelude::*;
 use ext_php_rs::types::ZendHashTable;
 
-use llama_cpp_2::context::params::LlamaContextParams;
+use llama_cpp_2::context::params::{LlamaContextParams, LlamaPoolingType};
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::{AddBos, LlamaChatMessage, LlamaModel};
 use llama_cpp_2::sampling::LlamaSampler;
 
+use crate::embedding::Embedding;
 use crate::error::InferError;
 use crate::prompt::Prompt;
 use crate::response::{FinishReason, Response};
@@ -104,9 +105,30 @@ const BATCH_CAPACITY: usize = 512;
 /// After `close()`, every other method throws `InferenceException`.
 #[php_class]
 #[php(name = "Displace\\Infer\\Model")]
-#[derive(Default)]
 pub struct Model {
     inner: Option<LlamaModel>,
+    /// Whether this handle was loaded with `embedding: true`. `embed()` checks
+    /// this and refuses to run on a generation-mode handle — embedding mode
+    /// requires `with_embeddings(true)` on the context, which conflicts with
+    /// causal-LM decoding.
+    embedding_mode: bool,
+    /// Pooling strategy used when the context is built in embedding mode.
+    /// `Unspecified` lets llama.cpp pick based on the GGUF's metadata —
+    /// almost always the right answer for purpose-built embedding models.
+    pooling_type: LlamaPoolingType,
+}
+
+// `LlamaPoolingType` doesn't derive `Default`, so we can't blanket-derive
+// `Default` on `Model`. Hand-roll the impl with the same "trust GGUF
+// metadata" choice the constructor's default-arm uses.
+impl Default for Model {
+    fn default() -> Self {
+        Self {
+            inner: None,
+            embedding_mode: false,
+            pooling_type: LlamaPoolingType::Unspecified,
+        }
+    }
 }
 
 #[php_impl]
@@ -128,10 +150,37 @@ impl Model {
     /// - `n_gpu_layers` (int, default 0)
     /// - `use_mmap` (bool, default true)
     /// - `use_mlock` (bool, default false)
+    /// - `embedding` (bool, default false) — when `true`, `embed()` is
+    ///   permitted on this handle. `chat()` and `raw()` are unaffected:
+    ///   they build their own per-call context for generation regardless
+    ///   of this flag. The flag exists to make the embedding intent
+    ///   explicit at load time so a missing `pooling` option can be
+    ///   validated up front instead of at the first `embed()` call.
+    /// - `pooling` (string, default `"unspecified"`) — only consulted when
+    ///   `embedding: true`. One of `"unspecified"` (trust GGUF metadata,
+    ///   the default), `"none"`, `"mean"`, `"cls"`, `"last"`, `"rank"`.
     pub fn load(path: String, options: Option<&ZendHashTable>) -> PhpResult<Self> {
         let n_gpu_layers = get_uint(options, "n_gpu_layers")?.unwrap_or(0);
         let use_mmap = get_bool(options, "use_mmap")?.unwrap_or(true);
         let use_mlock = get_bool(options, "use_mlock")?.unwrap_or(false);
+        let embedding_mode = get_bool(options, "embedding")?.unwrap_or(false);
+        let pooling_type = match get_string(options, "pooling")?.as_deref() {
+            None | Some("unspecified") => LlamaPoolingType::Unspecified,
+            Some("none") => LlamaPoolingType::None,
+            Some("mean") => LlamaPoolingType::Mean,
+            Some("cls") => LlamaPoolingType::Cls,
+            Some("last") => LlamaPoolingType::Last,
+            Some("rank") => LlamaPoolingType::Rank,
+            Some(other) => {
+                return Err(InferError::InvalidOption {
+                    name: "pooling".into(),
+                    reason: format!(
+                        "expected one of unspecified/none/mean/cls/last/rank, got {other:?}"
+                    ),
+                }
+                .into());
+            }
+        };
 
         let path_buf = PathBuf::from(&path);
         if !path_buf.is_file() {
@@ -147,7 +196,11 @@ impl Model {
         let model = LlamaModel::load_from_file(backend, &path_buf, &params)
             .map_err(|e| InferError::ModelLoad(format!("{path}: {e}")))?;
 
-        Ok(Self { inner: Some(model) })
+        Ok(Self {
+            inner: Some(model),
+            embedding_mode,
+            pooling_type,
+        })
     }
 
     /// Run a chat completion against the loaded model.
@@ -251,6 +304,32 @@ impl Model {
             },
         )?;
         Ok(result.text)
+    }
+
+    /// Generate a vector embedding for a single text.
+    ///
+    /// Requires the model to have been loaded with `embedding: true` —
+    /// embedding mode flips a flag on the underlying context and is
+    /// incompatible with generation in the same handle. Calling `embed()`
+    /// on a generation-only handle throws `InferenceException` with a
+    /// clear "load with embedding: true" message.
+    ///
+    /// Pooling defaults to whatever the GGUF metadata declares — purpose-
+    /// built embedding GGUFs (BGE, E5, GTE, Qwen3-Embedding, ...) all
+    /// embed their pooling strategy, so the default is the right answer
+    /// for the overwhelming majority of cases. Override at load time with
+    /// `['pooling' => 'mean' | 'cls' | 'last' | ...]` if a model ships
+    /// without the metadata or you want to experiment.
+    pub fn embed(&self, text: String) -> PhpResult<Embedding> {
+        let model = self.inner.as_ref().ok_or(InferError::Closed)?;
+        if !self.embedding_mode {
+            return Err(InferError::Inference(
+                "Model::embed() requires loading with ['embedding' => true]".into(),
+            )
+            .into());
+        }
+        let vector = run_embedding(model, &text, self.pooling_type)?;
+        Ok(Embedding::from_vec(vector))
     }
 
     /// Release the underlying model weights. Idempotent; calling `close()`
@@ -392,6 +471,79 @@ fn run_completion(
     })
 }
 
+// --- Embedding core ---------------------------------------------------------
+
+const EMBED_DEFAULT_N_CTX: u32 = 2048;
+const EMBED_BATCH_CAPACITY: usize = 512;
+
+/// Generate a single embedding vector for `text` using the given pooling.
+///
+/// We build a fresh context with `with_embeddings(true)` and the requested
+/// pooling type, tokenize the input with the model's preferred BOS handling,
+/// submit one batch, then pull the pooled vector via
+/// `embeddings_seq_ith(0)`. The context is dropped at function exit — same
+/// "no shared state between calls" model as `run_completion`.
+fn run_embedding(
+    model: &LlamaModel,
+    text: &str,
+    pooling: LlamaPoolingType,
+) -> Result<Vec<f32>, InferError> {
+    let backend = backend()?;
+
+    let n_ctx_nz = NonZeroU32::new(EMBED_DEFAULT_N_CTX).expect("constant > 0");
+    let ctx_params = LlamaContextParams::default()
+        .with_n_ctx(Some(n_ctx_nz))
+        .with_embeddings(true)
+        .with_pooling_type(pooling);
+    let mut ctx = model
+        .new_context(backend, ctx_params)
+        .map_err(|e| InferError::Inference(format!("embedding context creation failed: {e}")))?;
+
+    let tokens = model
+        .str_to_token(text, AddBos::Always)
+        .map_err(|e| InferError::Inference(format!("tokenization failed: {e}")))?;
+
+    if tokens.is_empty() {
+        return Err(InferError::Inference(
+            "cannot embed empty text — tokenizer produced no tokens".into(),
+        ));
+    }
+    let token_count = i32::try_from(tokens.len())
+        .map_err(|_| InferError::Inference("input token count overflows i32".into()))?;
+    if (token_count as u32) > EMBED_DEFAULT_N_CTX {
+        return Err(InferError::Inference(format!(
+            "input is {token_count} tokens but the embedding context is {EMBED_DEFAULT_N_CTX}"
+        )));
+    }
+
+    let mut batch = LlamaBatch::new(EMBED_BATCH_CAPACITY, 1);
+    let last = token_count - 1;
+    for (i, token) in tokens.into_iter().enumerate() {
+        let i = i as i32;
+        // With `Last`/`Cls` pooling llama.cpp wants logits=true on the
+        // appropriate position; with `Mean` it reads all hidden states.
+        // Asking for logits on every token is harmless and works
+        // uniformly across pooling strategies.
+        let _ = last;
+        batch
+            .add(token, i, &[0], true)
+            .map_err(|e| InferError::Inference(format!("batch add failed: {e}")))?;
+    }
+    ctx.decode(&mut batch)
+        .map_err(|e| InferError::Inference(format!("embedding decode failed: {e}")))?;
+
+    // `embeddings_seq_ith(0)` returns the pooled vector for sequence 0.
+    // For `LlamaPoolingType::None`, that would be per-token instead and
+    // require a different read path; we don't expose `None` as a sensible
+    // default because it doesn't yield a single vector. Callers who pick
+    // `pooling: 'none'` and then call `embed()` will see llama.cpp's
+    // error here, which is the right surface.
+    let slice = ctx
+        .embeddings_seq_ith(0)
+        .map_err(|e| InferError::Inference(format!("embedding read failed: {e}")))?;
+    Ok(slice.to_vec())
+}
+
 // --- Option parsing helpers -------------------------------------------------
 //
 // Each helper takes the optional `$options` array passed from PHP to
@@ -432,5 +584,17 @@ fn get_bool(opts: Option<&ZendHashTable>, key: &str) -> Result<Option<bool>, Inf
         .ok_or_else(|| InferError::InvalidOption {
             name: key.into(),
             reason: "expected bool".into(),
+        })
+}
+
+fn get_string(opts: Option<&ZendHashTable>, key: &str) -> Result<Option<String>, InferError> {
+    let Some(zv) = opts.and_then(|o| o.get(key)) else {
+        return Ok(None);
+    };
+    String::from_zval(zv)
+        .map(Some)
+        .ok_or_else(|| InferError::InvalidOption {
+            name: key.into(),
+            reason: "expected string".into(),
         })
 }

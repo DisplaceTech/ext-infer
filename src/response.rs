@@ -167,63 +167,9 @@ pub(crate) fn split_thinking(text: &str) -> (Option<String>, String) {
     (reasoning, answer)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{split_thinking, FinishReason, Response};
-
-    #[test]
-    fn split_returns_none_and_original_when_no_tags() {
-        let (reasoning, answer) = split_thinking("  hello world");
-        assert_eq!(reasoning, None);
-        // Whitespace preserved when nothing was stripped.
-        assert_eq!(answer, "  hello world");
-    }
-
-    #[test]
-    fn split_extracts_single_block_and_trims_answer() {
-        let raw = "<think>Okay so 2+2 = 4.</think>\n\n2 + 2 = 4.";
-        let (reasoning, answer) = split_thinking(raw);
-        assert_eq!(reasoning.as_deref(), Some("Okay so 2+2 = 4."));
-        assert_eq!(answer, "2 + 2 = 4.");
-    }
-
-    #[test]
-    fn split_joins_multiple_blocks_with_blank_line() {
-        let raw = "<think>first</think>mid<think>second</think>end";
-        let (reasoning, answer) = split_thinking(raw);
-        assert_eq!(reasoning.as_deref(), Some("first\n\nsecond"));
-        assert_eq!(answer, "midend");
-    }
-
-    #[test]
-    fn split_returns_captured_blocks_and_partial_tail_when_open_unclosed() {
-        let raw = "<think>step one</think>\n\nintermediate<think>step two";
-        let (reasoning, answer) = split_thinking(raw);
-        // First block captured; second block was truncated so its
-        // partial content stays in the answer rather than disappearing.
-        assert_eq!(reasoning.as_deref(), Some("step one"));
-        assert_eq!(answer, "\n\nintermediate<think>step two");
-    }
-
-    #[test]
-    fn split_treats_orphan_close_as_literal() {
-        let raw = "answer </think> trailing";
-        let (reasoning, answer) = split_thinking(raw);
-        assert_eq!(reasoning, None);
-        assert_eq!(answer, "answer </think> trailing");
-    }
-
-    #[test]
-    fn response_new_populates_all_fields() {
-        let r = Response::new(
-            "<think>thought</think>\n\nresult".to_string(),
-            FinishReason::Eos,
-            17,
-        );
-        assert_eq!(r.text, "<think>thought</think>\n\nresult");
-        assert_eq!(r.reasoning.as_deref(), Some("thought"));
-        assert_eq!(r.answer, "result");
-        assert_eq!(r.finish_reason, "eos");
-        assert_eq!(r.tokens_generated, 17);
-    }
-}
+// NOTE: unit tests for `split_thinking` (no tags, single block, multiple
+// blocks, unclosed-open, orphan-close) used to live here. `cargo test --lib`
+// links the test binary statically and can't resolve the ext-php-rs / Zend
+// symbols referenced by sibling `#[php_class]` code paths, so they fail to
+// build on a clean checkout. Coverage moved into PHPT 011 (reasoning split
+// against Qwen3) plus PHPT 009 (Response shape).

@@ -14,6 +14,7 @@
 
 #![deny(clippy::all)]
 
+mod embedding;
 mod error;
 mod model;
 mod prompt;
@@ -23,6 +24,7 @@ use ext_php_rs::prelude::*;
 
 // Re-export so `cargo php stubs` and module registration can see them by
 // their crate-root paths.
+pub use embedding::Embedding;
 pub use error::{InferException, InferenceException, ModelLoadException};
 pub use model::Model;
 pub use prompt::{Message, Prompt};
@@ -47,5 +49,6 @@ pub fn get_module(module: ModuleBuilder) -> ModuleBuilder {
         .class::<Message>()
         .class::<Prompt>()
         .class::<Response>()
+        .class::<Embedding>()
         .class::<Model>()
 }
