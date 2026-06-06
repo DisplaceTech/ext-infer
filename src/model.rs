@@ -52,8 +52,17 @@ fn backend() -> Result<&'static LlamaBackend, InferError> {
     if let Some(b) = BACKEND.get() {
         return Ok(b);
     }
-    let backend = LlamaBackend::init()
+    let mut backend = LlamaBackend::init()
         .map_err(|e| InferError::ModelLoad(format!("llama backend init failed: {e}")))?;
+    // llama.cpp logs profusely to stderr by default (model layout, KV cache
+    // sizing, graph reservation, ...). For a PHP extension running inside a
+    // web request or CLI worker, that flood is noise — silence it unless the
+    // caller explicitly asks for it via `EXT_INFER_LOG=1`. `llama_log_set`
+    // (called transitively from `void_logs`) is process-global, so doing
+    // this once during backend init covers every subsequent llama.cpp call.
+    if std::env::var_os("EXT_INFER_LOG").is_none() {
+        backend.void_logs();
+    }
     // `set` can only fail if another thread won the race; in that case the
     // value is already populated and we fall through to the `get().unwrap()`.
     let _ = BACKEND.set(backend);
