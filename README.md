@@ -265,7 +265,7 @@ tag, the [release workflow](.github/workflows/release.yml) builds a
 - `Model::raw()` escape hatch for prompt-string control
 - `Model::embed()` + `Embedding` (vector math, cosine similarity)
 - Typed exception hierarchy
-- PHPT suite + CI on PHP {8.3, 8.4} × {macOS-arm64, ubuntu-latest}
+- PHPT suite + CI on PHP {8.3, 8.4, 8.5} × {macOS-arm64, ubuntu-latest}
 - PIE-compatible composer.json + tag-triggered per-platform binary release workflow
 
 **Next (not committed)**

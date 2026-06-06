@@ -51,7 +51,9 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-14]   # macos-14 is the arm64 runner
-        php: ['8.3', '8.4']
+        # 8.5 is the current stable; 8.4 is the most-deployed; 8.3 is
+        # security-only through end of 2026 but still widely installed.
+        php: ['8.3', '8.4', '8.5']
     steps:
       - uses: actions/checkout@v4
 

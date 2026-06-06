@@ -10,11 +10,12 @@ name: Release
 #
 #     php_{ExtensionName}-{Version}_php{PhpVersion}-{Arch}-{OS}-{Libc}-{Debug}-{TSMode}.{Format}
 #
-# For our matrix that means:
+# For our 9-leg matrix (PHP 8.3/8.4/8.5 × {macos-arm64, linux-x86_64,
+# linux-arm64}) that means tarballs like:
 #
-#     php_infer-0.1.0_php8.4-arm64-darwin.tar.gz
+#     php_infer-0.1.0_php8.5-arm64-darwin.tar.gz
 #     php_infer-0.1.0_php8.4-x86_64-linux-glibc.tar.gz
-#     php_infer-0.1.0_php8.4-arm64-linux-glibc.tar.gz
+#     php_infer-0.1.0_php8.3-arm64-linux-glibc.tar.gz
 #
 # (NTS-only for now; ZTS support is enabled in composer.json but no widely
 # distributed ZTS PHP runner ships on the GitHub matrix yet — revisit when
@@ -41,6 +42,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # macos-arm64
           - label: 'php8.3-arm64-darwin'
             runner: macos-14
             php: '8.3'
@@ -53,6 +55,13 @@ jobs:
             arch: 'arm64'
             os: 'darwin'
             libc: ''
+          - label: 'php8.5-arm64-darwin'
+            runner: macos-14
+            php: '8.5'
+            arch: 'arm64'
+            os: 'darwin'
+            libc: ''
+          # linux-x86_64
           - label: 'php8.3-x86_64-linux-glibc'
             runner: ubuntu-latest
             php: '8.3'
@@ -65,6 +74,13 @@ jobs:
             arch: 'x86_64'
             os: 'linux'
             libc: 'glibc'
+          - label: 'php8.5-x86_64-linux-glibc'
+            runner: ubuntu-latest
+            php: '8.5'
+            arch: 'x86_64'
+            os: 'linux'
+            libc: 'glibc'
+          # linux-arm64
           - label: 'php8.3-arm64-linux-glibc'
             runner: ubuntu-24.04-arm
             php: '8.3'
@@ -74,6 +90,12 @@ jobs:
           - label: 'php8.4-arm64-linux-glibc'
             runner: ubuntu-24.04-arm
             php: '8.4'
+            arch: 'arm64'
+            os: 'linux'
+            libc: 'glibc'
+          - label: 'php8.5-arm64-linux-glibc'
+            runner: ubuntu-24.04-arm
+            php: '8.5'
             arch: 'arm64'
             os: 'linux'
             libc: 'glibc'

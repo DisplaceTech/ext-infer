@@ -95,17 +95,21 @@ must:
 
 ## What the release workflow does
 
-`.github/workflows/release.yml` fires on the `v*` tag push and runs six
-parallel jobs:
+`.github/workflows/release.yml` fires on the `v*` tag push and runs
+nine parallel jobs — three PHP minors (8.3, 8.4, 8.5) × three
+platforms (macos-arm64, linux-x86_64, linux-arm64):
 
 | Job                                       | Runner             |
 | ----------------------------------------- | ------------------ |
 | build php8.3-arm64-darwin                 | macos-14           |
 | build php8.4-arm64-darwin                 | macos-14           |
+| build php8.5-arm64-darwin                 | macos-14           |
 | build php8.3-x86_64-linux-glibc           | ubuntu-latest      |
 | build php8.4-x86_64-linux-glibc           | ubuntu-latest      |
+| build php8.5-x86_64-linux-glibc           | ubuntu-latest      |
 | build php8.3-arm64-linux-glibc            | ubuntu-24.04-arm   |
 | build php8.4-arm64-linux-glibc            | ubuntu-24.04-arm   |
+| build php8.5-arm64-linux-glibc            | ubuntu-24.04-arm   |
 
 Each job:
 
