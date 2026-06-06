@@ -106,13 +106,35 @@ Displace\Infer\InferenceException    extends Displace\Infer\InferException
 
 ### `Model::complete()` options
 
-| Key           | Type  | Default | Notes                                          |
-| ------------- | ----- | ------- | ---------------------------------------------- |
-| `max_tokens`  | int   | `128`   | Hard cap on generated tokens.                  |
-| `n_ctx`       | int   | `2048`  | Context window for this call.                  |
-| `temperature` | float | `0.0`   | `0.0` is greedy; anything `> 0` samples.       |
-| `seed`        | int   | `1234`  | RNG seed used when `temperature > 0`.          |
-| `add_bos`     | bool  | `true`  | Prepend the model's beginning-of-sequence tok. |
+| Key              | Type  | Default | Notes                                                       |
+| ---------------- | ----- | ------- | ----------------------------------------------------------- |
+| `max_tokens`     | int   | `128`   | Hard cap on generated tokens.                               |
+| `n_ctx`          | int   | `2048`  | Context window for this call.                               |
+| `temperature`    | float | `0.0`   | `0.0` is greedy; anything `> 0` samples.                    |
+| `seed`           | int   | `1234`  | RNG seed used when `temperature > 0`.                       |
+| `add_bos`        | bool  | `true`  | Prepend the model's beginning-of-sequence tok.              |
+| `strip_thinking` | bool  | `false` | Remove `<think>...</think>` blocks from the returned text.  |
+
+#### Reasoning models and `strip_thinking`
+
+Reasoning models like Qwen3 and DeepSeek R1 wrap their internal monologue
+in `<think>...</think>` blocks when invoked through their chat template:
+
+```php
+$prompt = "<|im_start|>user\nwhat is 2+2?<|im_end|>\n<|im_start|>assistant\n";
+
+// raw: returns the full <think>...long monologue...</think>\n\n2 + 2 = 4.
+$model->complete($prompt, ['max_tokens' => 256]);
+
+// stripped: returns just "2 + 2 = 4."
+$model->complete($prompt, ['max_tokens' => 256, 'strip_thinking' => true]);
+```
+
+The option is a no-op on non-reasoning models (no tags to strip), so it's
+safe to leave on if you don't know which family of model you'll see. An
+unclosed `<think>` block — typical when `max_tokens` truncates mid-thought
+— is left in the output so the budget problem is visible to the caller
+rather than silently swallowed.
 
 ## Development
 

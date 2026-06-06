@@ -41,11 +41,18 @@ class Model
      *
      * @param string               $prompt  Input prompt; tokenized with BOS by default.
      * @param array<string, mixed> $options Recognised keys:
-     *                                      - `max_tokens`  (int,   default 128)
-     *                                      - `n_ctx`       (int,   default 2048)
-     *                                      - `temperature` (float, default 0.0 — greedy)
-     *                                      - `seed`        (int,   default 1234)
-     *                                      - `add_bos`     (bool,  default true)
+     *                                      - `max_tokens`     (int,   default 128)
+     *                                      - `n_ctx`          (int,   default 2048)
+     *                                      - `temperature`    (float, default 0.0 — greedy)
+     *                                      - `seed`           (int,   default 1234)
+     *                                      - `add_bos`        (bool,  default true)
+     *                                      - `strip_thinking` (bool,  default false)
+     *                                        — when true, remove `<think>...</think>`
+     *                                        blocks from the returned text. Useful
+     *                                        with reasoning models (Qwen3, R1, …)
+     *                                        that wrap their internal monologue in
+     *                                        those tags when prompted through a
+     *                                        chat template.
      *
      * @throws \Displace\Infer\InferenceException If decoding or sampling fails,
      *                                            or if the model has been closed.

@@ -140,6 +140,10 @@ impl Model {
     /// - `temperature` (float, default 0.0 — greedy)
     /// - `seed` (int, default 1234)
     /// - `add_bos` (bool, default true)
+    /// - `strip_thinking` (bool, default false) — when true, remove any
+    ///   `<think>...</think>` blocks from the returned text and trim the
+    ///   leading whitespace that reasoning models tend to emit before
+    ///   their answer. No effect on output that doesn't contain the tags.
     pub fn complete(&self, prompt: String, options: Option<&ZendHashTable>) -> PhpResult<String> {
         let model = self.inner.as_ref().ok_or(InferError::Closed)?;
 
@@ -148,6 +152,7 @@ impl Model {
         let temperature = get_float(options, "temperature")?.unwrap_or(DEFAULT_TEMPERATURE);
         let seed = get_uint(options, "seed")?.unwrap_or(DEFAULT_SEED);
         let add_bos = get_bool(options, "add_bos")?.unwrap_or(DEFAULT_ADD_BOS);
+        let strip_thinking = get_bool(options, "strip_thinking")?.unwrap_or(false);
 
         let text = run_completion(
             model,
@@ -160,7 +165,11 @@ impl Model {
                 add_bos,
             },
         )?;
-        Ok(text)
+        Ok(if strip_thinking {
+            strip_think_blocks(&text)
+        } else {
+            text
+        })
     }
 
     /// Release the underlying model weights. Idempotent; calling `close()`
@@ -335,4 +344,84 @@ fn get_bool(opts: Option<&ZendHashTable>, key: &str) -> Result<Option<bool>, Inf
             name: key.into(),
             reason: "expected bool".into(),
         })
+}
+
+// --- Reasoning-model output post-processing --------------------------------
+//
+// Reasoning models (Qwen3, DeepSeek R1, ...) wrap their internal monologue
+// in `<think>...</think>` blocks when invoked through their chat template.
+// Most application code only wants the final answer that follows the close
+// tag. We strip every complete `<think>...</think>` block we find, then
+// trim the leading whitespace the model habitually inserts before the
+// answer.
+//
+// If a `<think>` opens but never closes — typical when `max_tokens` runs
+// out mid-thought — we leave that suffix in place rather than discard the
+// whole tail. The alternative (drop everything from the open tag) would
+// silently return an empty string for an under-budgeted run; surfacing the
+// partial thought makes the budget problem obvious to the caller.
+
+fn strip_think_blocks(text: &str) -> String {
+    const OPEN: &str = "<think>";
+    const CLOSE: &str = "</think>";
+
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(start) = rest.find(OPEN) {
+        out.push_str(&rest[..start]);
+        let after_open = &rest[start + OPEN.len()..];
+        match after_open.find(CLOSE) {
+            Some(end) => rest = &after_open[end + CLOSE.len()..],
+            None => {
+                // Unclosed block. Keep the rest verbatim and bail.
+                out.push_str(&rest[start..]);
+                return out;
+            }
+        }
+    }
+    out.push_str(rest);
+    out.trim_start().to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::strip_think_blocks;
+
+    #[test]
+    fn strip_passes_through_text_without_tags() {
+        assert_eq!(strip_think_blocks("Paris."), "Paris.");
+    }
+
+    #[test]
+    fn strip_removes_single_think_block_and_trims_leading_whitespace() {
+        let raw = "<think>Okay so 2+2 is 4.</think>\n\n2 + 2 = 4.";
+        assert_eq!(strip_think_blocks(raw), "2 + 2 = 4.");
+    }
+
+    #[test]
+    fn strip_removes_empty_think_block() {
+        // Qwen3's `/no_think` directive emits an empty block.
+        let raw = "<think>\n\n</think>\n\n2 + 2 = 4.";
+        assert_eq!(strip_think_blocks(raw), "2 + 2 = 4.");
+    }
+
+    #[test]
+    fn strip_handles_multiple_think_blocks() {
+        let raw = "<think>first</think>middle<think>second</think>end";
+        assert_eq!(strip_think_blocks(raw), "middleend");
+    }
+
+    #[test]
+    fn strip_preserves_unclosed_think_block() {
+        // Truncated mid-thought because of a stingy max_tokens.
+        let raw = "<think>Okay so the answer is";
+        assert_eq!(strip_think_blocks(raw), "<think>Okay so the answer is");
+    }
+
+    #[test]
+    fn strip_preserves_close_without_open() {
+        // No matching `<think>`, so `</think>` is just literal text.
+        let raw = "answer </think> trailing";
+        assert_eq!(strip_think_blocks(raw), "answer </think> trailing");
+    }
 }
