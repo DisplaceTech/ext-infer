@@ -1,8 +1,10 @@
 //! `ext-infer` — PHP 8.3+ native, in-process LLM inference via llama.cpp.
 //!
-//! Public surface (Phase 1):
+//! Public surface:
 //!
-//! - `Displace\Infer\Model`              — load + run completions
+//! - `Displace\Infer\Model`              — load + run completions / embeddings
+//! - `Displace\Infer\Prompt`             — immutable chat-prompt builder
+//! - `Displace\Infer\Message`            — single message in a `Prompt`
 //! - `Displace\Infer\InferException`     — base exception (extends `\RuntimeException`)
 //! - `Displace\Infer\ModelLoadException` — load-time failure
 //! - `Displace\Infer\InferenceException` — runtime failure
@@ -13,6 +15,7 @@
 
 mod error;
 mod model;
+mod prompt;
 
 use ext_php_rs::prelude::*;
 
@@ -20,6 +23,7 @@ use ext_php_rs::prelude::*;
 // their crate-root paths.
 pub use error::{InferException, InferenceException, ModelLoadException};
 pub use model::Model;
+pub use prompt::{Message, Prompt};
 
 /// PHP module entry point.
 ///
@@ -37,5 +41,7 @@ pub fn get_module(module: ModuleBuilder) -> ModuleBuilder {
         .class::<InferException>()
         .class::<ModelLoadException>()
         .class::<InferenceException>()
+        .class::<Message>()
+        .class::<Prompt>()
         .class::<Model>()
 }

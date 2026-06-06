@@ -47,6 +47,11 @@ pub enum InferError {
         /// Human-readable explanation of what was wrong.
         reason: String,
     },
+
+    /// Direct `new ClassName()` is not supported. Wraps a hint pointing the
+    /// caller at the right factory (`Model::load()`, `Prompt::user()`, ...).
+    #[error("{0}")]
+    InvalidConstruction(String),
 }
 
 impl From<InferError> for PhpException {
@@ -57,7 +62,9 @@ impl From<InferError> for PhpException {
             InferError::Inference(_) | InferError::Closed => {
                 PhpException::from_class::<InferenceException>(message)
             }
-            InferError::InvalidOption { .. } => PhpException::from_class::<InferException>(message),
+            InferError::InvalidOption { .. } | InferError::InvalidConstruction(_) => {
+                PhpException::from_class::<InferException>(message)
+            }
         }
     }
 }

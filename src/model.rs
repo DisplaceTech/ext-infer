@@ -98,10 +98,10 @@ impl Model {
     /// constructor exists only to give callers a clear error if they try
     /// `new Model()` out of habit.
     pub fn __construct() -> PhpResult<Self> {
-        Err(
-            InferError::ModelLoad("use Displace\\Infer\\Model::load() to construct a Model".into())
-                .into(),
+        Err(InferError::InvalidConstruction(
+            "use Displace\\Infer\\Model::load() to construct a Model".into(),
         )
+        .into())
     }
 
     /// Load a GGUF model from disk.

@@ -20,6 +20,77 @@ class InferenceException extends \Displace\Infer\InferException
 {
 }
 
+/**
+ * A single message in a chat `Prompt`.
+ *
+ * Read-only. Instances are produced by the `Prompt` builder methods; direct
+ * construction is refused (`new Message()` throws `InferException`).
+ */
+final class Message
+{
+    /** @throws \Displace\Infer\InferException Always. */
+    public function __construct() {}
+
+    /** One of `'system'`, `'user'`, or `'assistant'`. */
+    public function role(): string {}
+
+    /** The message body, verbatim. */
+    public function content(): string {}
+}
+
+/**
+ * Immutable, fluent chat-prompt builder.
+ *
+ * Start with `Prompt::system($s)` or `Prompt::user($s)`; chain `with*` calls
+ * for additional turns. Every `with*` returns a new `Prompt` — the receiver
+ * is never modified, in the style of `DateTimeImmutable::add()`.
+ *
+ * ```php
+ * $p = Prompt::system('You are helpful.')
+ *     ->withUser('What is 2+2?');
+ * ```
+ *
+ * The resulting `Prompt` is fed to `Model::chat()`, which renders it through
+ * the model's embedded chat template — callers never need to write
+ * `<|im_start|>` tokens by hand.
+ */
+final class Prompt
+{
+    /** @throws \Displace\Infer\InferException Always — use `Prompt::system()` or `Prompt::user()`. */
+    public function __construct() {}
+
+    /** Start a prompt with a system message. */
+    public static function system(string $content): self {}
+
+    /** Start a prompt with a user message. */
+    public static function user(string $content): self {}
+
+    /** Return a new prompt with a system message appended. */
+    public function withSystem(string $content): self {}
+
+    /** Return a new prompt with a user message appended. */
+    public function withUser(string $content): self {}
+
+    /** Return a new prompt with an assistant message appended (useful for replaying history). */
+    public function withAssistant(string $content): self {}
+
+    /**
+     * The messages in order.
+     *
+     * @return list<\Displace\Infer\Message>
+     */
+    public function messages(): array {}
+
+    /** Role of the most recently appended message, or `null` if empty. */
+    public function lastRole(): ?string {}
+
+    /** Number of messages in the prompt. */
+    public function count(): int {}
+
+    /** `true` when there are no messages. */
+    public function isEmpty(): bool {}
+}
+
 class Model
 {
     /**
