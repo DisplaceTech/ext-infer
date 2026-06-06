@@ -73,7 +73,15 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
+      # `ext-php-rs` generates PHP-version-specific FFI bindings during its
+      # build script — those bindings are baked into the cached `target/`
+      # tree. The default rust-cache key doesn't include the matrix PHP
+      # version, so without this scoping the PHP 8.3 leg primes the cache
+      # and the PHP 8.4 leg restores PHP-8.3-bound artifacts, which then
+      # fail to load into a PHP 8.4 process at runtime.
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: php-${{ matrix.php }}
 
       - name: Build
         run: cargo build --verbose
