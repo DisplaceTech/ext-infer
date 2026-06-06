@@ -1,0 +1,20 @@
+# Linker settings for building `infer.so` / `infer.dylib` as a PHP extension.
+#
+# PHP extensions are cdylibs that resolve Zend symbols (zend_throw_exception,
+# zval_ptr_dtor, ...) at runtime against the loading PHP binary. Tell the
+# linker to defer those undefined symbols instead of failing at build time:
+#
+#   - macOS / BSD ld64       : `-undefined dynamic_lookup`
+#   - GNU ld (Linux glibc)   : symbols in a `cdylib` are already deferred
+#                              when not referenced from another `.so`, so
+#                              the flag is a no-op but harmless.
+#   - musl                   : disable crt-static; cdylibs cannot statically
+#                              link the C runtime against a host PHP.
+#
+# Mirrors ext-php-rs's own .cargo/config.toml — kept here so contributors get
+# a working `cargo build` out of the box without having to use `cargo php`.
+[target.'cfg(not(target_os = "windows"))']
+rustflags = ["-C", "link-arg=-Wl,-undefined,dynamic_lookup"]
+
+[target.'cfg(target_env = "musl")']
+rustflags = ["-C", "target-feature=-crt-static"]

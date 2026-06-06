@@ -1,0 +1,30 @@
+[package]
+name          = "ext-infer"
+version       = "0.1.0"
+edition       = "2021"
+rust-version  = "1.88"
+license       = "MIT"
+description   = "PHP 8.3+ native, in-process inference against local GGUF models via llama.cpp."
+repository    = "https://github.com/displace/ext-infer"
+readme        = "README.md"
+publish       = false
+
+[lib]
+name       = "infer"
+crate-type = ["cdylib"]
+
+[dependencies]
+ext-php-rs = "=0.15.13"
+llama-cpp-2 = "=0.1.146"
+thiserror  = "=2.0.18"
+
+[features]
+default = []
+# Enables Apple Metal acceleration via llama.cpp on macOS-arm64.
+# Opt-in for now; revisit as default after Phase 1.
+metal   = ["llama-cpp-2/metal"]
+
+[profile.release]
+lto           = "thin"
+codegen-units = 1
+strip         = "symbols"
