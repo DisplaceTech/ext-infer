@@ -12,7 +12,6 @@ title = "ext-infer"
 authors = ["Eric Mann"]
 description = "Local LLM inference for PHP, in-process. Documentation for the ext-infer extension."
 language = "en"
-multilingual = false
 src = "src"
 
 [build]
@@ -25,7 +24,6 @@ create-missing = false
 default-theme = "light"
 preferred-dark-theme = "navy"
 git-repository-url = "https://github.com/DisplaceTech/ext-infer"
-git-repository-icon = "fa-github"
 edit-url-template = "https://github.com/DisplaceTech/ext-infer/edit/main/docs/{path}"
 site-url = "/"
 no-section-label = false
