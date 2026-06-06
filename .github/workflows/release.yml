@@ -1,0 +1,177 @@
+name: Release
+
+# Triggered when a tag matching `v*` is pushed (e.g. `v0.1.0`). For each
+# supported platform × PHP-minor combination, we build a release-mode
+# `infer.so`/`infer.dylib`, package it with PIE's expected filename
+# convention, and upload the artifact to the GitHub Release that the
+# tag created.
+#
+# Filename convention (per PIE docs, /docs/extension-maintainers.md):
+#
+#     php_{ExtensionName}-{Version}_php{PhpVersion}-{Arch}-{OS}-{Libc}-{Debug}-{TSMode}.{Format}
+#
+# For our matrix that means:
+#
+#     php_infer-0.1.0_php8.4-arm64-darwin.tar.gz
+#     php_infer-0.1.0_php8.4-x86_64-linux-glibc.tar.gz
+#     php_infer-0.1.0_php8.4-arm64-linux-glibc.tar.gz
+#
+# (NTS-only for now; ZTS support is enabled in composer.json but no widely
+# distributed ZTS PHP runner ships on the GitHub matrix yet — revisit when
+# `shivammathur/setup-php` grows a TS option on the runners we use.)
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write    # uploads the release artifacts
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  build:
+    name: build ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: 'php8.3-arm64-darwin'
+            runner: macos-14
+            php: '8.3'
+            arch: 'arm64'
+            os: 'darwin'
+            libc: ''
+          - label: 'php8.4-arm64-darwin'
+            runner: macos-14
+            php: '8.4'
+            arch: 'arm64'
+            os: 'darwin'
+            libc: ''
+          - label: 'php8.3-x86_64-linux-glibc'
+            runner: ubuntu-latest
+            php: '8.3'
+            arch: 'x86_64'
+            os: 'linux'
+            libc: 'glibc'
+          - label: 'php8.4-x86_64-linux-glibc'
+            runner: ubuntu-latest
+            php: '8.4'
+            arch: 'x86_64'
+            os: 'linux'
+            libc: 'glibc'
+          - label: 'php8.3-arm64-linux-glibc'
+            runner: ubuntu-24.04-arm
+            php: '8.3'
+            arch: 'arm64'
+            os: 'linux'
+            libc: 'glibc'
+          - label: 'php8.4-arm64-linux-glibc'
+            runner: ubuntu-24.04-arm
+            php: '8.4'
+            arch: 'arm64'
+            os: 'linux'
+            libc: 'glibc'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system deps (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential libclang-dev
+
+      - name: Install system deps (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cmake
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: none
+          coverage: none
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          # Same per-PHP scoping as ci.yml — ext-php-rs bindings are
+          # PHP-version-specific and the default cache key doesn't include
+          # the matrix.
+          key: release-php-${{ matrix.php }}-${{ matrix.arch }}
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Stage artifact
+        id: stage
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+          OS: ${{ matrix.os }}
+          LIBC: ${{ matrix.libc }}
+          PHP_MINOR: ${{ matrix.php }}
+        run: |
+          set -euo pipefail
+          # Compute version from the tag (strip leading "v") so the filename
+          # matches PIE's expectation regardless of what the maintainer typed.
+          version="${GITHUB_REF_NAME#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          # Resolve binary suffix per OS.
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            ext_in="dylib"
+          else
+            ext_in="so"
+          fi
+          src="$PWD/target/release/libinfer.$ext_in"
+          test -f "$src" || { echo "missing $src"; exit 1; }
+
+          # PIE expects the loadable to be named `infer.so` / `infer.dylib`
+          # in the archive — that's what gets dropped into the PHP extension
+          # directory under the `extension-name` from composer.json.
+          stage="$RUNNER_TEMP/stage"
+          mkdir -p "$stage"
+          cp "$src" "$stage/infer.$ext_in"
+
+          # Tarball name per PIE's convention. The libc segment is empty on
+          # darwin (no Apple Mach-O libc family); we suppress the dangling
+          # dash with a small conditional.
+          libc_segment=""
+          if [ -n "$LIBC" ]; then
+            libc_segment="-$LIBC"
+          fi
+          archive="php_infer-${version}_php${PHP_MINOR}-${ARCH}-${OS}${libc_segment}.tar.gz"
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+
+          # tar from inside the staging dir so the archive doesn't carry a
+          # nested directory prefix — PIE expects the loadable at the root.
+          tar -C "$stage" -czf "$RUNNER_TEMP/$archive" "infer.$ext_in"
+          echo "path=$RUNNER_TEMP/$archive" >> "$GITHUB_OUTPUT"
+
+          # Also stash a SHA-256 alongside for downstream supply-chain
+          # verification once we publish a Packagist-or-similar listing.
+          if command -v sha256sum >/dev/null 2>&1; then
+            (cd "$RUNNER_TEMP" && sha256sum "$archive" > "$archive.sha256")
+          else
+            (cd "$RUNNER_TEMP" && shasum -a 256 "$archive" > "$archive.sha256")
+          fi
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          # `softprops` skips updating fields like `body` when this job runs
+          # against an existing release (one matrix leg will create the
+          # release, the rest will reuse it). Setting `draft: true` keeps
+          # the release out of the public-feed until a maintainer reviews
+          # the contents and clicks "Publish".
+          draft: true
+          files: |
+            ${{ runner.temp }}/${{ steps.stage.outputs.archive }}
+            ${{ runner.temp }}/${{ steps.stage.outputs.archive }}.sha256
+          fail_on_unmatched_files: true
