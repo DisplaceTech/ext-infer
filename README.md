@@ -12,21 +12,44 @@ and the [`llama-cpp-2`](https://crates.io/crates/llama-cpp-2) bindings.
 
 ## Hello, model
 
+Grab a small GGUF and run the bundled example. Qwen3-0.6B-Q8 (~640 MB)
+loads in under a second on Apple Silicon and is small enough to keep
+around as a fixture:
+
+```sh
+mkdir -p models
+curl -L -o models/Qwen3-0.6B-Q8_0.gguf \
+    https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf
+```
+
+Then either install the extension (`make install`) or point at the local
+build with `-d extension=...` and run [`examples/hello-world.php`](examples/hello-world.php):
+
+```sh
+php -d extension=$PWD/target/debug/libinfer.dylib \
+    examples/hello-world.php models/Qwen3-0.6B-Q8_0.gguf
+# => The capital of France is Paris. The capital of Italy is Rome. ...
+```
+
+The script itself is a couple dozen lines:
+
 ```php
 <?php
 use Displace\Infer\Model;
 
-$model = Model::load('/models/llama-3.2-1b-instruct-q4_k_m.gguf');
-
+$model = Model::load($argv[1]);
 $reply = $model->complete('The capital of France is', [
     'max_tokens'  => 32,
     'temperature' => 0.0,
 ]);
-
 echo $reply, PHP_EOL;
-
 $model->close();
 ```
+
+llama.cpp's own stderr chatter (model layout, KV-cache sizing, graph
+reservation) is silenced by default — it's not useful inside a PHP
+request and tends to poison structured logs. Set `EXT_INFER_LOG=1` in
+the environment if you want to see it.
 
 ## Install
 

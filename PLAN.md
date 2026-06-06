@@ -41,15 +41,19 @@ through it, plus the questions still open before each milestone closes.
 Goal: prove the inference loop produces sensible output against an actual
 GGUF file, with both greedy and sampled paths exercised.
 
-- [ ] Choose a canonical test model (Llama 3.2 1B Q4_K_M is ~770 MB and a
-      reasonable lower bound). Document the URL and SHA in
-      [`README.md`](README.md#development) — do not commit the file.
-- [ ] Run `INFER_TEST_MODEL=/path/to/model.gguf make test` end-to-end;
-      confirm the 4 currently-skipped tests pass.
-- [ ] Hand-write a `examples/hello_model.php` mirroring the README snippet
-      and verify it produces non-empty, deterministic output at
-      `temperature=0.0` and varied-but-stable output at `temperature=0.7,
-      seed=N`.
+- [x] Pick a canonical test model. Qwen3-0.6B-Q8_0 (~640 MB,
+      Apache-2.0-licensed via `Qwen/Qwen3-0.6B-GGUF` on HuggingFace) is
+      small enough to fit in a developer's `models/` directory without
+      thinking about disk; the README points contributors at it with a
+      one-line `curl`.
+- [x] `INFER_TEST_MODEL=models/Qwen3-0.6B-Q8_0.gguf make test`
+      end-to-end: all six PHPT tests pass.
+- [x] `examples/hello-world.php` produces non-empty, deterministic
+      output at `temperature=0.0` ("Paris. The capital of Italy is
+      Rome..."), distinct-per-seed output at `temperature=0.8`.
+- [x] Silence llama.cpp's stderr noise by default — see `backend()` in
+      `src/model.rs`. Opt back in with `EXT_INFER_LOG=1`. Without this,
+      the README's "hello world" was unusable.
 - [ ] Verify `make install` ships `infer.dylib` into the homebrew
       `extension-dir` and `php -m | grep infer` finds it.
 - [ ] Verify the `metal` feature (`make release FEATURES=metal && make
@@ -61,7 +65,8 @@ Open questions:
 - Do we ship a tiny "tinyllama"-class fixture model for CI use, or keep CI
   model-free and run model tests only locally? Leaning toward the latter
   — model bytes blow past sane CI cache budgets and licensing is murky
-  for many small GGUFs.
+  for many small GGUFs. (Qwen3-0.6B-Q8 is Apache-2.0, so we *could*
+  cache it in CI — revisit when the matrix grows.)
 
 ### M2 — Linux x86_64 parity
 
