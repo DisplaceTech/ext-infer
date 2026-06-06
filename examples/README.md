@@ -19,14 +19,21 @@ choices we've tested locally:
 mkdir -p ../models  # project-root/models/, gitignored
 
 # Qwen3-0.6B-Q8_0 — ~640 MB, Apache-2.0, chat-tuned reasoning model.
-# Good default for hello-world and chat-interactive.
+# Good default for hello-world.php and chat-interactive/.
 curl -L -o ../models/Qwen3-0.6B-Q8_0.gguf \
     https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf
+
+# Qwen3-Embedding-0.6B-Q8_0 — ~640 MB, Apache-2.0, purpose-built
+# embedding model. Use with embedding.php for realistic semantic-
+# similarity numbers.
+curl -L -o ../models/Qwen3-Embedding-0.6B-Q8_0.gguf \
+    https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/resolve/main/Qwen3-Embedding-0.6B-Q8_0.gguf
 ```
 
-For the embedding example, a purpose-built embedding GGUF (BGE-small,
-E5-small, Qwen3-Embedding, …) will give much higher-quality vectors
-than a chat model, but the example works with either.
+The embedding example will run against a chat-tuned model too (it'll
+return a vector — just a noisier one). For RAG / semantic search /
+anything where similarity scores need to be reliable, pick a
+purpose-built embedding model.
 
 ## Running
 
@@ -67,18 +74,20 @@ $ php -d extension=… examples/hello-world.php models/Qwen3-0.6B-Q8_0.gguf
 2 + 2 equals 4.
 ```
 
-`embedding.php` against the same model (chat-tuned, so similarity
-numbers are illustrative not production-grade):
+`embedding.php` against the dedicated embedding model:
 
 ```
-$ php -d extension=… examples/embedding.php models/Qwen3-0.6B-Q8_0.gguf
+$ php -d extension=… examples/embedding.php models/Qwen3-Embedding-0.6B-Q8_0.gguf
 dimensions: 1024
 
-sim(0, 1) = +0.6612  | The cat sat on the mat.  <->  A feline rested on the rug.
-sim(0, 2) = +0.5104  | The cat sat on the mat.  <->  I went grocery shopping yesterday.
-sim(1, 2) = +0.5023  | A feline rested on the rug.  <->  I went grocery shopping yesterday.
+sim(0, 1) = +0.7207  | The cat sat on the mat.  <->  A feline rested on the rug.
+sim(0, 2) = +0.2865  | The cat sat on the mat.  <->  I went grocery shopping yesterday.
+sim(1, 2) = +0.2561  | A feline rested on the rug.  <->  I went grocery shopping yesterday.
 ```
 
-The cat-mat ↔ feline-rug pair scores highest, as expected. With a real
-embedding model the gap between paraphrase and unrelated would be much
-wider.
+Paraphrase pair scores 0.72; unrelated pairs hover around 0.27. That
+~0.45-point gap is what makes vectors usable for nearest-neighbor
+search. Run the same example against the chat-tuned `Qwen3-0.6B-Q8_0`
+and you'll see all three pairs land in the 0.50–0.66 range — the
+ordering is right but the gap is much narrower, which is why
+purpose-built embedding models matter for real semantic-search work.
