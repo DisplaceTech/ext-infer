@@ -1,0 +1,46 @@
+# mdbook configuration for the ext-infer documentation site.
+#
+# Build locally with:
+#     mdbook serve docs/        # live-reloading preview at http://localhost:3000
+#     mdbook build docs/        # one-shot HTML build into docs/book/
+#
+# CI builds with the same `mdbook build docs/` (see .github/workflows/docs.yml)
+# and deploys the result to GitHub Pages at https://infer.displace.tech.
+
+[book]
+title = "ext-infer"
+authors = ["Eric Mann"]
+description = "Local LLM inference for PHP, in-process. Documentation for the ext-infer extension."
+language = "en"
+multilingual = false
+src = "src"
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+# Default mdbook theme — stock for now (D2). Revisit if we want
+# Displace blue accents once a logo is sourced.
+default-theme = "light"
+preferred-dark-theme = "navy"
+git-repository-url = "https://github.com/DisplaceTech/ext-infer"
+git-repository-icon = "fa-github"
+edit-url-template = "https://github.com/DisplaceTech/ext-infer/edit/main/docs/{path}"
+site-url = "/"
+no-section-label = false
+
+[output.html.search]
+enable = true
+limit-results = 30
+teaser-word-count = 30
+use-boolean-and = true
+boost-title = 2
+boost-hierarchy = 1
+boost-paragraph = 1
+expand = true
+heading-split-level = 3
+
+[output.html.fold]
+enable = true
+level = 1

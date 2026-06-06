@@ -1,25 +1,42 @@
-# ext-infer
+<h1 align="center">ext-infer</h1>
 
-`ext-infer` is a PHP 8.3+ extension that brings local LLM inference into
-the PHP process itself, via [llama.cpp](https://github.com/ggerganov/llama.cpp).
-It exists so that PHP-native semantic search, RAG pipelines, and CLI/worker
-inference can run without shelling out to Python or hitting a remote API.
+<p align="center">
+  <strong>Local LLM inference for PHP, in-process.</strong><br>
+  Chat, embeddings, and reasoning models — no Python sidecar, no remote API.
+</p>
 
-The extension is written in Rust on top of [`ext-php-rs`](https://github.com/davidcole1340/ext-php-rs)
-and the [`llama-cpp-2`](https://crates.io/crates/llama-cpp-2) bindings.
-The public PHP surface is fluent and role-aware — building a chat prompt
-looks like `Prompt::system(...)->withUser(...)`, not a string of
-`<|im_start|>` tokens.
+<p align="center">
+  <a href="https://github.com/DisplaceTech/ext-infer/actions/workflows/ci.yml"><img src="https://github.com/DisplaceTech/ext-infer/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <a href="https://github.com/DisplaceTech/ext-infer/releases/latest"><img src="https://img.shields.io/github/v/release/DisplaceTech/ext-infer?sort=semver&include_prereleases" alt="Latest release" /></a>
+  <img src="https://img.shields.io/badge/PHP-8.3%20%7C%208.4%20%7C%208.5-777BB4?logo=php&logoColor=white" alt="PHP 8.3 / 8.4 / 8.5" />
+  <img src="https://img.shields.io/badge/Status-pre--release-orange" alt="Pre-release" />
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License" /></a>
+  <a href="https://infer.displace.tech"><img src="https://img.shields.io/badge/docs-infer.displace.tech-blue" alt="Documentation" /></a>
+</p>
 
-> Status: **pre-1.0.** The class surface is stable; we'll cut `v0.1.0` once
-> the release-binary pipeline is exercised end-to-end. See
-> [`RELEASE.md`](RELEASE.md) for the cut-a-release flow.
+---
 
-## Hello, model
+## What is ext-infer?
 
-Grab a small GGUF and run the bundled example. Qwen3-0.6B-Q8 (~640 MB,
-Apache-2.0) loads in under a second on Apple Silicon and is small
-enough to keep around as a fixture:
+`ext-infer` is a PHP 8.3+ extension that loads a GGUF model and runs
+inference *in the PHP process* via [llama.cpp](https://github.com/ggerganov/llama.cpp).
+PHP-native semantic search, RAG pipelines, and CLI/worker inference work
+without shelling out to Python or hitting a remote API.
+
+Written in Rust on top of [`ext-php-rs`](https://github.com/davidcole1340/ext-php-rs)
+and the [`llama-cpp-2`](https://crates.io/crates/llama-cpp-2) bindings. The
+public PHP surface is fluent and role-aware — building a chat prompt looks
+like `Prompt::system(...)->withUser(...)`, not a string of `<|im_start|>`
+tokens.
+
+- 💬 **Chat completions** via an immutable `Prompt` builder that renders through the model's embedded template — no manual `<|im_start|>` plumbing.
+- 🧠 **Reasoning-model aware** — `Response::answer()` and `Response::reasoning()` split Qwen3 / R1-style `<think>…</think>` output automatically.
+- 📊 **Embeddings** — `Model::embed()` returns an `Embedding` with `dimensions()`, `normalize()`, `cosineSimilarity()` built in.
+- ⚡ **In-process** — no subprocess fork, no IPC, no daemon. Latency is whatever the model takes to decode.
+- 🛠️ **Apple Metal** acceleration is opt-in (`make release FEATURES=metal`); CPU is the portable default.
+- 🧵 **Thread-safe** — `LlamaBackend` is a `Sync`-guarded singleton and each call builds its own context, so ZTS PHP + `parallel` works by design.
+
+## Quick start
 
 ```sh
 mkdir -p models
@@ -27,25 +44,12 @@ curl -L -o models/Qwen3-0.6B-Q8_0.gguf \
     https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf
 ```
 
-Then either install the extension (`make install` or — once we ship
-binaries — `pie install displace/ext-infer`) or point at the local
-build with `-d extension=...` and run [`examples/hello-world.php`](examples/hello-world.php):
-
-```sh
-php -d extension=$PWD/target/debug/libinfer.dylib \
-    examples/hello-world.php models/Qwen3-0.6B-Q8_0.gguf
-# => 2 + 2 equals 4.
-```
-
-The minimal program:
-
 ```php
 <?php
 use Displace\Infer\Model;
 use Displace\Infer\Prompt;
 
-$model = Model::load('/path/to/llama.gguf');
-
+$model    = Model::load('models/Qwen3-0.6B-Q8_0.gguf');
 $response = $model->chat(
     Prompt::system('You are a helpful assistant.')
         ->withUser('What is 2+2?'),
@@ -53,230 +57,56 @@ $response = $model->chat(
     temperature: 0.0,
 );
 
-echo $response->answer(), PHP_EOL;  // "2 + 2 equals 4."
+echo $response->answer(), PHP_EOL;   // "2 + 2 equals 4."
+echo $response->reasoning() ?? '';    // captured <think>…</think>, if any
 
 $model->close();
 ```
 
-`$response->reasoning()` exposes whatever the model emitted inside
-`<think>...</think>` blocks; `$response->text()` is the full
-concatenation. For full control over the prompt string (custom
-templates, base models without a chat template, etc.), use
-`$model->raw('Once upon a time, ', maxTokens: 32)`.
-
-llama.cpp's own stderr chatter (model layout, KV-cache sizing, graph
-reservation) is silenced by default — it's not useful inside a PHP
-request and tends to poison structured logs. Set `EXT_INFER_LOG=1` in
-the environment if you want to see it.
-
-## Embeddings
-
-`Model::embed()` returns an `Embedding` with vector math built in:
-
-```php
-$model = Model::load('/path/to/embedding-model.gguf', ['embedding' => true]);
-
-$a = $model->embed('The cat sat on the mat.')->normalize();
-$b = $model->embed('A feline rested on the rug.')->normalize();
-
-echo $a->cosineSimilarity($b), PHP_EOL;  // ~0.72 with Qwen3-Embedding-0.6B
-echo $a->dimensions(), PHP_EOL;          // 1024
-```
-
-See [`examples/embedding.php`](examples/embedding.php) for the
-pairwise-similarity flow, and [`examples/README.md`](examples/README.md)
-for the recommended embedding model.
-
-## Install
-
-### Via PIE (preferred — once we publish v0.1.0)
-
 ```sh
-# Install PIE first; see https://github.com/php/pie for current docs
-curl -L --output pie.phar \
-    https://github.com/php/pie/releases/latest/download/pie.phar
-chmod +x pie.phar && sudo mv pie.phar /usr/local/bin/pie
-
-pie install displace/ext-infer
-php -m | grep infer
+make build       # produces target/debug/libinfer.{so,dylib}
+php -d extension=$PWD/target/debug/libinfer.dylib hello.php
 ```
 
-PIE fetches the appropriate pre-built binary for your `(php-minor,
-arch, os, libc)` combo from the GitHub Release for the tag you're
-installing. No local C/C++ toolchain required.
+Full walkthrough — including the [interactive Symfony Console
+chat](examples/chat-interactive/) and [pairwise-similarity embedding
+example](examples/embedding.php) — under [**`examples/`**](examples/).
 
-### From source
+## Documentation
 
-```sh
-git clone https://github.com/DisplaceTech/ext-infer
-cd ext-infer
-make release          # builds target/release/libinfer.{so,dylib}
-make install          # cargo php install --release
-php -m | grep infer   # confirm it loaded
-```
+[**infer.displace.tech**](https://infer.displace.tech) hosts the full
+guide:
 
-Prereqs for the source build:
+- [Getting started](https://infer.displace.tech/getting-started/installation.html) — install via PIE or from source, verify, troubleshoot.
+- [Guide](https://infer.displace.tech/guide/prompts.html) — prompts, chat, raw, embeddings, choosing a model.
+- [Recipes](https://infer.displace.tech/recipes/multi-turn-chat.html) — multi-turn chat, semantic search, RAG over markdown, worker pools.
+- [Reference](https://infer.displace.tech/reference/api.html) — full API surface, exceptions, environment variables, compatibility matrix.
+- [Advanced](https://infer.displace.tech/advanced/threading.html) — threading, Metal, performance tuning.
 
-- PHP 8.3 or 8.4, with `php-config` on `PATH`
-- Rust toolchain (stable; the repo pins via `rust-toolchain.toml`)
-- `cmake` and a C/C++ toolchain (llama.cpp builds during the cargo build)
-- `cargo install cargo-php` once, for the `cargo php` subcommands
+The site is built from [`docs/`](docs/) with [`mdbook`](https://rust-lang.github.io/mdBook/)
+and deploys automatically on every push to `main`.
 
-### Apple Metal acceleration (opt-in)
+## Compatibility
 
-The default release build is CPU-only and portable. For Apple Silicon
-GPU offload:
+|                | macOS arm64 | Linux x86_64 | Linux arm64 | Windows |
+| -------------- | :---------: | :----------: | :---------: | :-----: |
+| **PHP 8.3**    |      ✅     |      ✅      |      ✅     |    —    |
+| **PHP 8.4**    |      ✅     |      ✅      |      ✅     |    —    |
+| **PHP 8.5**    |      ✅     |      ✅      |      ✅     |    —    |
 
-```sh
-make release FEATURES=metal
-make install  FEATURES=metal
-```
-
-We'll flip Metal on by default once the macos-14 GitHub runner's
-hardware mix is exercised end-to-end.
-
-## API surface
-
-```text
-Displace\Infer\
-    Model::load(string $path, array $options = []): self
-
-    Model::chat(Prompt $prompt,
-                int $maxTokens = 128,
-                int $nCtx = 2048,
-                float $temperature = 0.0,
-                int $seed = 1234): Response
-    Model::raw(string $prompt,
-               int $maxTokens = 128,
-               int $nCtx = 2048,
-               float $temperature = 0.0,
-               int $seed = 1234,
-               bool $addBos = true): string
-    Model::embed(string $text): Embedding
-    Model::close(): void
-
-    Prompt::system(string $content): self
-    Prompt::user(string $content): self
-    Prompt::withSystem(string): self
-    Prompt::withUser(string): self
-    Prompt::withAssistant(string): self
-    Prompt::messages(): list<Message>
-    Prompt::lastRole(): ?string
-    Prompt::count(): int
-    Prompt::isEmpty(): bool
-
-    Message::role(): string         // 'system' | 'user' | 'assistant'
-    Message::content(): string
-
-    Response::text(): string        // full output, <think>…</think> + answer
-    Response::reasoning(): ?string  // <think>…</think> content, or null
-    Response::answer(): string      // text() with reasoning stripped
-    Response::hasReasoning(): bool
-    Response::finishReason(): string  // 'eos' | 'length' | 'stop'
-    Response::tokensGenerated(): int
-
-    Embedding::vector(): list<float>
-    Embedding::dimensions(): int
-    Embedding::norm(): float
-    Embedding::normalize(): self
-    Embedding::cosineSimilarity(Embedding $other): float
-
-    InferException        extends \RuntimeException
-    ├── ModelLoadException
-    └── InferenceException
-```
-
-`Prompt`, `Message`, `Response`, and `Embedding` all refuse direct
-`new` — they're either built via static factories (`Prompt::system`,
-`Prompt::user`) or returned from `Model` methods. `Prompt` is
-immutable: every `with*` returns a new instance, in the style of
-`DateTimeImmutable::add()`.
-
-### `Model::load()` options
-
-| Key            | Type   | Default         | Notes                                                                                                |
-| -------------- | ------ | --------------- | ---------------------------------------------------------------------------------------------------- |
-| `n_gpu_layers` | int    | `0`             | Layers offloaded to GPU; CPU when `0`.                                                               |
-| `use_mmap`     | bool   | `true`          | Memory-map the GGUF file.                                                                            |
-| `use_mlock`    | bool   | `false`         | Lock weights in RAM.                                                                                 |
-| `embedding`    | bool   | `false`         | Enable `embed()` on this handle. Generation methods (`chat`/`raw`) still work on an embedding handle.|
-| `pooling`      | string | `'unspecified'` | One of `unspecified`/`none`/`mean`/`cls`/`last`/`rank`. Default trusts GGUF metadata.                |
-
-### Reasoning models
-
-Reasoning-tuned models (Qwen3, DeepSeek R1, …) wrap their internal
-monologue in `<think>...</think>` blocks when invoked through their
-chat template. `Model::chat()` handles the template automatically;
-the `Response` it returns splits the reasoning out for you:
-
-```php
-$r = $model->chat(Prompt::user('What is 2+2?'));
-
-$r->text();         // "<think>Okay so 2+2…</think>\n\n2 + 2 equals 4."
-$r->reasoning();    // "Okay so 2+2…"
-$r->answer();       // "2 + 2 equals 4."
-$r->hasReasoning(); // true
-```
-
-For non-reasoning models, `reasoning()` is `null` and `answer()` equals
-`text()` byte-for-byte.
-
-## Examples
-
-See [`examples/`](examples/) for full-context walkthroughs:
-
-- [`hello-world.php`](examples/hello-world.php) — one-shot chat completion.
-- [`embedding.php`](examples/embedding.php) — pairwise semantic similarity.
-- [`chat-interactive/`](examples/chat-interactive/) — Symfony Console
-  multi-turn chat app. Demonstrates immutable `Prompt` accumulation
-  across turns, reasoning-model handling, and graceful inference errors.
-
-## Development
-
-```sh
-make build       # debug build
-make clippy      # cargo clippy -- -D warnings
-make fmt-check   # cargo fmt --check
-make stubs       # regenerate stubs/infer.stubs.php from the registered classes
-make test        # PHPT suite (needs php run-tests.php; see Makefile)
-```
-
-PHPT tests that require an actual model file are gated on the
-`INFER_TEST_MODEL` env var:
-
-```sh
-INFER_TEST_MODEL=$PWD/models/Qwen3-0.6B-Q8_0.gguf make test
-```
-
-## Releasing
-
-See [`RELEASE.md`](RELEASE.md). TL;DR: bump `Cargo.toml`, push a `v*`
-tag, the [release workflow](.github/workflows/release.yml) builds a
-6-leg matrix of pre-packaged binaries that PIE picks up.
+ZTS is supported by design (the code is thread-safe), enabled in
+`composer.json`, and not yet exercised in CI. Windows is intentionally
+out of scope for v0.1.
 
 ## Roadmap
 
-**Shipped**
+**Shipped** &nbsp; chat completions · raw completions · embeddings · reasoning split · typed exceptions · PHPT suite · CI matrix · PIE-compatible `composer.json` · tag-triggered binary release workflow.
 
-- Load GGUF from disk
-- Fluent chat prompts (`Prompt::system()->withUser()…`)
-- `Model::chat()` returning a `Response` (reasoning + answer split,
-  finish-reason, token count)
-- `Model::raw()` escape hatch for prompt-string control
-- `Model::embed()` + `Embedding` (vector math, cosine similarity)
-- Typed exception hierarchy
-- PHPT suite + CI on PHP {8.3, 8.4, 8.5} × {macOS-arm64, ubuntu-latest}
-- PIE-compatible composer.json + tag-triggered per-platform binary release workflow
+**Next** &nbsp; first `v0.1.0` release · streaming completions · KV-cache reuse via reusable `Session` objects · stop-string support · tool calling · continuous batching · Apple Metal default on macos-arm64.
 
-**Next (not committed)**
-
-- Streaming completions (PHP `Generator` or callback-based)
-- Reusable session/context objects (KV-cache reuse across `chat()` calls)
-- Stop-string support on `chat()` / `raw()`
-- Tool calling (delegated to the model's tool-template support where present)
-- Continuous batching for worker scenarios
-- Apple Metal on by default for macOS-arm64
+See [`PLAN.md`](PLAN.md) for the current planning doc and [`RELEASE.md`](RELEASE.md)
+for the cut-a-release flow.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+[MIT](LICENSE) &copy; 2026 Eric Mann / Displace Technologies
