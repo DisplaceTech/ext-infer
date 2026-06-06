@@ -21,6 +21,41 @@ class InferenceException extends \Displace\Infer\InferException
 }
 
 /**
+ * Result of a `Model::chat()` call.
+ *
+ * Reasoning-model output (Qwen3, DeepSeek R1, ...) is split into the
+ * `<think>...</think>` content (available via `reasoning()`) and the actual
+ * answer that follows (available via `answer()`); the raw concatenation is
+ * always accessible via `text()`.
+ *
+ * Read-only. Instances are produced by `Model::chat()`; direct construction
+ * throws `InferException`.
+ */
+final class Response
+{
+    /** @throws \Displace\Infer\InferException Always. */
+    public function __construct() {}
+
+    /** Full model output, including any `<think>` block(s). Same as a raw completion. */
+    public function text(): string {}
+
+    /** Reasoning extracted from `<think>...</think>` block(s), or `null` if none was emitted. */
+    public function reasoning(): ?string {}
+
+    /** `text()` with `<think>...</think>` block(s) removed; the model's actual answer. */
+    public function answer(): string {}
+
+    /** `true` if the model emitted any `<think>...</think>` content. */
+    public function hasReasoning(): bool {}
+
+    /** Why generation stopped: `'eos'`, `'length'`, or `'stop'`. */
+    public function finishReason(): string {}
+
+    /** Number of tokens the model generated (prompt tokens are not counted). */
+    public function tokensGenerated(): int {}
+}
+
+/**
  * A single message in a chat `Prompt`.
  *
  * Read-only. Instances are produced by the `Prompt` builder methods; direct
