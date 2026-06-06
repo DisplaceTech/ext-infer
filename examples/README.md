@@ -1,0 +1,84 @@
+# `ext-infer` examples
+
+Self-contained scripts you can copy-paste from when wiring `ext-infer`
+into a real project. Each one stays minimal: no framework overhead
+beyond what its job actually requires.
+
+| Example                             | What it shows                                                  | Deps              |
+| ----------------------------------- | -------------------------------------------------------------- | ----------------- |
+| [`hello-world.php`](hello-world.php) | One-shot `Model::chat()` round-trip with a system + user prompt. The shortest "is my install working?" script. | none              |
+| [`embedding.php`](embedding.php)    | `Model::embed()` + `Embedding::cosineSimilarity()` for pairwise semantic similarity. Foundation of any RAG / semantic-search use case. | none              |
+| [`chat-interactive/`](chat-interactive/) | Multi-turn console chat. A Symfony Console standalone app demonstrating immutable `Prompt` accumulation, reasoning-model handling, and graceful inference errors. | `symfony/console` |
+
+## Picking a model
+
+Most examples work against any GGUF that fits in memory. Two small
+choices we've tested locally:
+
+```sh
+mkdir -p ../models  # project-root/models/, gitignored
+
+# Qwen3-0.6B-Q8_0 — ~640 MB, Apache-2.0, chat-tuned reasoning model.
+# Good default for hello-world and chat-interactive.
+curl -L -o ../models/Qwen3-0.6B-Q8_0.gguf \
+    https://huggingface.co/Qwen/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q8_0.gguf
+```
+
+For the embedding example, a purpose-built embedding GGUF (BGE-small,
+E5-small, Qwen3-Embedding, …) will give much higher-quality vectors
+than a chat model, but the example works with either.
+
+## Running
+
+If you've installed `ext-infer` system-wide (via `make install` or
+`pie install` once we ship binaries), nothing extra is needed:
+
+```sh
+php examples/hello-world.php models/Qwen3-0.6B-Q8_0.gguf
+```
+
+If you're running against a development build instead, point at the
+freshly built `.so`/`.dylib`:
+
+```sh
+php -d extension=$(pwd)/target/debug/libinfer.dylib \
+    examples/hello-world.php models/Qwen3-0.6B-Q8_0.gguf
+```
+
+Substitute `.so` for `.dylib` on Linux.
+
+## Silencing llama.cpp logs
+
+`ext-infer` mutes llama.cpp's stderr by default — the model-layout /
+KV-cache-sizing chatter is useful for debugging the engine but not for
+running an app. Set `EXT_INFER_LOG=1` to bring it back when you want
+to see what's happening under the hood:
+
+```sh
+EXT_INFER_LOG=1 php examples/hello-world.php models/qwen3.gguf
+```
+
+## What good looks like
+
+`hello-world.php` against Qwen3-0.6B on a recent M-series:
+
+```
+$ php -d extension=… examples/hello-world.php models/Qwen3-0.6B-Q8_0.gguf
+2 + 2 equals 4.
+```
+
+`embedding.php` against the same model (chat-tuned, so similarity
+numbers are illustrative not production-grade):
+
+```
+$ php -d extension=… examples/embedding.php models/Qwen3-0.6B-Q8_0.gguf
+dimensions: 1024
+
+sim(0, 1) = +0.6612  | The cat sat on the mat.  <->  A feline rested on the rug.
+sim(0, 2) = +0.5104  | The cat sat on the mat.  <->  I went grocery shopping yesterday.
+sim(1, 2) = +0.5023  | A feline rested on the rug.  <->  I went grocery shopping yesterday.
+```
+
+The cat-mat ↔ feline-rug pair scores highest, as expected. With a real
+embedding model the gap between paraphrase and unrelated would be much
+wider.

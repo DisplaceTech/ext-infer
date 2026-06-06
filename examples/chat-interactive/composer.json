@@ -1,0 +1,22 @@
+{
+    "name": "displace/ext-infer-chat-example",
+    "description": "Interactive chat console app demonstrating ext-infer's Prompt/Response/Model::chat() API.",
+    "license": "MIT",
+    "type": "project",
+    "require": {
+        "php": "^8.3",
+        "ext-infer": "*",
+        "symfony/console": "^7.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "ExtInferExample\\": "src/"
+        }
+    },
+    "bin": [
+        "bin/chat"
+    ],
+    "config": {
+        "sort-packages": true
+    }
+}
