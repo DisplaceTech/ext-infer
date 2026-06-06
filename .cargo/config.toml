@@ -1,20 +1,14 @@
-# Linker settings for building `infer.so` / `infer.dylib` as a PHP extension.
+# Settings that can't be expressed from build.rs.
 #
-# PHP extensions are cdylibs that resolve Zend symbols (zend_throw_exception,
-# zval_ptr_dtor, ...) at runtime against the loading PHP binary. Tell the
-# linker to defer those undefined symbols instead of failing at build time:
+# The dynamic-lookup link flag PHP extensions need at link time is emitted
+# by build.rs via `cargo:rustc-cdylib-link-arg=...`, which (unlike the
+# `rustflags` arrays here) survives a caller setting `RUSTFLAGS` in the
+# environment. See build.rs for the rationale and the CI failure mode that
+# forced this split.
 #
-#   - macOS / BSD ld64       : `-undefined dynamic_lookup`
-#   - GNU ld (Linux glibc)   : symbols in a `cdylib` are already deferred
-#                              when not referenced from another `.so`, so
-#                              the flag is a no-op but harmless.
-#   - musl                   : disable crt-static; cdylibs cannot statically
-#                              link the C runtime against a host PHP.
-#
-# Mirrors ext-php-rs's own .cargo/config.toml — kept here so contributors get
-# a working `cargo build` out of the box without having to use `cargo php`.
-[target.'cfg(not(target_os = "windows"))']
-rustflags = ["-C", "link-arg=-Wl,-undefined,dynamic_lookup"]
+# The musl target-feature override below has no `cargo:` directive
+# equivalent — it has to live in `rustflags`. Consumers targeting musl with
+# `RUSTFLAGS` set must include `-C target-feature=-crt-static` themselves.
 
 [target.'cfg(target_env = "musl")']
 rustflags = ["-C", "target-feature=-crt-static"]
