@@ -1,5 +1,5 @@
 --TEST--
-Model::complete() returns a non-empty string for a basic prompt
+Model::raw() returns a non-empty string for a bare prompt
 --SKIPIF--
 <?php
 if (!extension_loaded('infer')) {
@@ -14,15 +14,13 @@ if (!$path || !is_file($path)) {
 --FILE--
 <?php
 $model = \Displace\Infer\Model::load(getenv('INFER_TEST_MODEL'));
-$out = $model->complete('The capital of France is', [
-    'max_tokens'  => 8,
-    'temperature' => 0.0,
-    'seed'        => 1,
-]);
-echo is_string($out) ? "string\n" : "not_string\n";
-echo (strlen($out) > 0) ? "non_empty\n" : "empty\n";
+
+$text = $model->raw('The capital of France is', maxTokens: 8, temperature: 0.0);
+echo "is_string: ", is_string($text) ? "yes" : "no", "\n";
+echo "non_empty: ", strlen($text) > 0 ? "yes" : "no", "\n";
+
 $model->close();
 ?>
 --EXPECT--
-string
-non_empty
+is_string: yes
+non_empty: yes

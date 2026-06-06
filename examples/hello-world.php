@@ -1,21 +1,22 @@
 <?php
 
 /*
- * Minimal smoke test for ext-infer.
+ * Minimal smoke test for ext-infer using the fluent chat API.
  *
  * Usage:
  *     php -d extension=/path/to/libinfer.{so,dylib} \
  *         examples/hello-world.php path/to/model.gguf [prompt]
  *
- * Defaults to "The capital of France is " when no prompt is given. The
- * extension silences llama.cpp's stderr chatter by default; set
- * `EXT_INFER_LOG=1` in the environment if you want to see it.
+ * Defaults to "What is 2+2?" when no prompt is given. The extension silences
+ * llama.cpp's stderr chatter by default; set `EXT_INFER_LOG=1` in the
+ * environment if you want to see it.
  */
 
 declare(strict_types=1);
 
 use Displace\Infer\InferException;
 use Displace\Infer\Model;
+use Displace\Infer\Prompt;
 
 if (!extension_loaded('infer')) {
     fwrite(STDERR, "ext-infer is not loaded. Build with `make build` and either run\n");
@@ -34,18 +35,17 @@ if (!is_file($modelPath)) {
     exit(2);
 }
 
-$prompt = $argv[2] ?? 'The capital of France is';
+$question = $argv[2] ?? 'What is 2+2?';
 
 try {
-    $model = Model::load($modelPath);
-    $reply = $model->complete($prompt, [
-        'max_tokens'  => 32,
-        'temperature' => 0.0,
-    ]);
+    $model    = Model::load($modelPath);
+    $prompt   = Prompt::system('You are helpful. Answer in one short sentence.')
+        ->withUser($question);
+    $response = $model->chat($prompt, maxTokens: 256, temperature: 0.0);
     $model->close();
 } catch (InferException $e) {
     fwrite(STDERR, get_class($e) . ': ' . $e->getMessage() . PHP_EOL);
     exit(1);
 }
 
-echo $prompt, $reply, PHP_EOL;
+echo $response->answer(), PHP_EOL;

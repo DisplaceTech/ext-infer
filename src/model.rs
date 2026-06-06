@@ -1,18 +1,40 @@
-//! `Displace\Infer\Model` — the only PHP class exposed in Phase 1.
+//! `Displace\Infer\Model` — the loaded GGUF and its inference entry points.
 //!
-//! Lifecycle:
+//! The public surface is two methods plus housekeeping:
 //!
 //! ```php
 //! $model = \Displace\Infer\Model::load('/path/to/llama.gguf');
-//! $text  = $model->complete('Once upon a time, ');
+//!
+//! // Fluent chat with role-aware prompts. Renders through the model's
+//! // embedded chat template — callers never see <|im_start|>.
+//! $resp = $model->chat(
+//!     \Displace\Infer\Prompt::system('You are helpful.')->withUser('What is 2+2?'),
+//!     maxTokens: 256,
+//!     temperature: 0.0,
+//! );
+//! echo $resp->answer();      // model's reply, with <think>...</think> stripped
+//! echo $resp->reasoning();   // ?string — the stripped reasoning, or null
+//!
+//! // Escape hatch for callers who need full control over the prompt string.
+//! $text = $model->raw('Once upon a time, ', maxTokens: 64);
+//!
 //! $model->close();
 //! ```
 //!
-//! A `Model` owns a [`LlamaModel`] (the in-memory weights). Each
-//! `complete()` call constructs a fresh [`LlamaContext`] from those weights,
-//! runs a synchronous decode/sample loop, and drops the context. Phase 2
-//! will introduce reusable session contexts; the public surface here is
-//! intentionally shaped so that can be added without a breaking change.
+//! A `Model` owns a [`LlamaModel`] (the in-memory weights). Each `chat()` /
+//! `raw()` call constructs a fresh [`LlamaContext`] from those weights, runs
+//! a synchronous decode/sample loop, and drops the context — multiple
+//! threads can call into the same `Model` concurrently because llama.cpp
+//! explicitly supports many contexts on one model. KV-cache reuse across
+//! calls is a future addition.
+//
+// `chat()` and `raw()` use camelCase parameter idents on purpose: PHP
+// named-arguments echo the Rust ident verbatim, and we want
+// `$model->chat($p, maxTokens: 256)` rather than `max_tokens:` for the
+// public API. The proc-macro expansion shifts those idents into generated
+// code where per-method `#[allow]` doesn't reach, so the lint is silenced
+// at the module level instead.
+#![allow(non_snake_case)]
 
 use std::num::NonZeroU32;
 use std::path::PathBuf;
@@ -26,10 +48,12 @@ use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::{AddBos, LlamaModel};
+use llama_cpp_2::model::{AddBos, LlamaChatMessage, LlamaModel};
 use llama_cpp_2::sampling::LlamaSampler;
 
 use crate::error::InferError;
+use crate::prompt::Prompt;
+use crate::response::{FinishReason, Response};
 
 // --- Backend singleton ------------------------------------------------------
 //
@@ -69,13 +93,6 @@ fn backend() -> Result<&'static LlamaBackend, InferError> {
     Ok(BACKEND.get().expect("backend just set"))
 }
 
-// --- Phase 1 defaults -------------------------------------------------------
-
-const DEFAULT_N_CTX: u32 = 2048;
-const DEFAULT_MAX_TOKENS: u32 = 128;
-const DEFAULT_TEMPERATURE: f32 = 0.0;
-const DEFAULT_SEED: u32 = 1234;
-const DEFAULT_ADD_BOS: bool = true;
 const BATCH_CAPACITY: usize = 512;
 
 // --- Model ------------------------------------------------------------------
@@ -106,7 +123,8 @@ impl Model {
 
     /// Load a GGUF model from disk.
     ///
-    /// Recognised `$options` keys:
+    /// Recognised `$options` keys (kept as an array because load-time tuning
+    /// is rare and noisy — chat/raw use named arguments instead):
     /// - `n_gpu_layers` (int, default 0)
     /// - `use_mmap` (bool, default true)
     /// - `use_mlock` (bool, default false)
@@ -132,44 +150,107 @@ impl Model {
         Ok(Self { inner: Some(model) })
     }
 
-    /// Run a synchronous completion against the loaded model.
+    /// Run a chat completion against the loaded model.
     ///
-    /// Recognised `$options` keys:
-    /// - `max_tokens` (int, default 128)
-    /// - `n_ctx` (int, default 2048)
-    /// - `temperature` (float, default 0.0 — greedy)
-    /// - `seed` (int, default 1234)
-    /// - `add_bos` (bool, default true)
-    /// - `strip_thinking` (bool, default false) — when true, remove any
-    ///   `<think>...</think>` blocks from the returned text and trim the
-    ///   leading whitespace that reasoning models tend to emit before
-    ///   their answer. No effect on output that doesn't contain the tags.
-    pub fn complete(&self, prompt: String, options: Option<&ZendHashTable>) -> PhpResult<String> {
+    /// The `Prompt`'s messages are rendered through the model's *embedded*
+    /// chat template (Qwen3, Llama 3, etc. ship the right Jinja template
+    /// inside the GGUF) — callers never write `<|im_start|>` tokens by
+    /// hand. The result is wrapped in a `Response` whose `answer()` getter
+    /// returns the reply with any `<think>...</think>` blocks stripped, and
+    /// whose `reasoning()` getter exposes what was stripped.
+    ///
+    /// Camel-cased parameter idents are intentional: PHP named-arguments use
+    /// the parameter name verbatim and the PSR-12 convention is camelCase.
+    #[php(defaults(maxTokens = 128, nCtx = 2048, temperature = 0.0, seed = 1234))]
+    pub fn chat(
+        &self,
+        prompt: &Prompt,
+        maxTokens: u32,
+        nCtx: u32,
+        temperature: f32,
+        seed: u32,
+    ) -> PhpResult<Response> {
         let model = self.inner.as_ref().ok_or(InferError::Closed)?;
 
-        let max_tokens = get_uint(options, "max_tokens")?.unwrap_or(DEFAULT_MAX_TOKENS);
-        let n_ctx = get_uint(options, "n_ctx")?.unwrap_or(DEFAULT_N_CTX);
-        let temperature = get_float(options, "temperature")?.unwrap_or(DEFAULT_TEMPERATURE);
-        let seed = get_uint(options, "seed")?.unwrap_or(DEFAULT_SEED);
-        let add_bos = get_bool(options, "add_bos")?.unwrap_or(DEFAULT_ADD_BOS);
-        let strip_thinking = get_bool(options, "strip_thinking")?.unwrap_or(false);
+        // Build the llama.cpp message list. `LlamaChatMessage::new` rejects
+        // null bytes in either field; surface that as a clear `Inference`
+        // error rather than a generic FFI failure.
+        let llama_messages: Vec<LlamaChatMessage> = prompt
+            .messages_slice()
+            .iter()
+            .map(|m| LlamaChatMessage::new(m.role_owned(), m.content_owned()))
+            .collect::<Result<_, _>>()
+            .map_err(|e| {
+                InferError::Inference(format!("chat message contains a null byte: {e}"))
+            })?;
 
-        let text = run_completion(
+        // Render through the model's embedded chat template. `None` asks
+        // llama-cpp-2 to read the template baked into the GGUF; any model
+        // without one (rare for modern instruct GGUFs) surfaces as a clear
+        // error rather than the engine silently picking ChatML.
+        let template = model.chat_template(None).map_err(|e| {
+            InferError::Inference(format!(
+                "model has no embedded chat template — use Model::raw() for this model: {e}"
+            ))
+        })?;
+        let rendered = model
+            .apply_chat_template(&template, &llama_messages, /* add_assistant = */ true)
+            .map_err(|e| InferError::Inference(format!("apply_chat_template failed: {e}")))?;
+
+        // The chat template handles BOS itself, so we explicitly disable
+        // our own BOS injection here.
+        let result = run_completion(
+            model,
+            &rendered,
+            RunOpts {
+                max_tokens: maxTokens,
+                n_ctx: nCtx,
+                temperature,
+                seed,
+                add_bos: false,
+            },
+        )?;
+
+        Ok(Response::new(
+            result.text,
+            result.finish_reason,
+            result.tokens_generated,
+        ))
+    }
+
+    /// Run a raw text completion. Escape hatch for callers who want full
+    /// control over the prompt string (custom templates, base models, ...).
+    /// Returns the generated text as a plain string — no reasoning split,
+    /// no `Response` wrapper. If you want any of that, use `chat()`.
+    #[php(defaults(
+        maxTokens = 128,
+        nCtx = 2048,
+        temperature = 0.0,
+        seed = 1234,
+        addBos = true
+    ))]
+    pub fn raw(
+        &self,
+        prompt: String,
+        maxTokens: u32,
+        nCtx: u32,
+        temperature: f32,
+        seed: u32,
+        addBos: bool,
+    ) -> PhpResult<String> {
+        let model = self.inner.as_ref().ok_or(InferError::Closed)?;
+        let result = run_completion(
             model,
             &prompt,
             RunOpts {
-                max_tokens,
-                n_ctx,
+                max_tokens: maxTokens,
+                n_ctx: nCtx,
                 temperature,
                 seed,
-                add_bos,
+                add_bos: addBos,
             },
         )?;
-        Ok(if strip_thinking {
-            strip_think_blocks(&text)
-        } else {
-            text
-        })
+        Ok(result.text)
     }
 
     /// Release the underlying model weights. Idempotent; calling `close()`
@@ -191,7 +272,19 @@ struct RunOpts {
     add_bos: bool,
 }
 
-fn run_completion(model: &LlamaModel, prompt: &str, opts: RunOpts) -> Result<String, InferError> {
+/// What `run_completion` returns. Carries enough metadata for `Response` to
+/// answer `finishReason()` / `tokensGenerated()` without re-deriving them.
+struct CompletionResult {
+    text: String,
+    finish_reason: FinishReason,
+    tokens_generated: u32,
+}
+
+fn run_completion(
+    model: &LlamaModel,
+    prompt: &str,
+    opts: RunOpts,
+) -> Result<CompletionResult, InferError> {
     let backend = backend()?;
 
     let n_ctx = NonZeroU32::new(opts.n_ctx).ok_or_else(|| InferError::InvalidOption {
@@ -214,7 +307,11 @@ fn run_completion(model: &LlamaModel, prompt: &str, opts: RunOpts) -> Result<Str
         .map_err(|e| InferError::Inference(format!("tokenization failed: {e}")))?;
 
     if prompt_tokens.is_empty() {
-        return Ok(String::new());
+        return Ok(CompletionResult {
+            text: String::new(),
+            finish_reason: FinishReason::Stop,
+            tokens_generated: 0,
+        });
     }
 
     let prompt_len = i32::try_from(prompt_tokens.len())
@@ -257,12 +354,16 @@ fn run_completion(model: &LlamaModel, prompt: &str, opts: RunOpts) -> Result<Str
     let mut n_decoded: u32 = 0;
     let budget = i32::try_from(opts.max_tokens).unwrap_or(i32::MAX);
 
-    while n_decoded < opts.max_tokens && n_cur < budget.saturating_add(prompt_len) {
+    let finish_reason = loop {
+        if n_decoded >= opts.max_tokens || n_cur >= budget.saturating_add(prompt_len) {
+            break FinishReason::Length;
+        }
+
         let token = sampler.sample(&ctx, batch.n_tokens() - 1);
         sampler.accept(token);
 
         if model.is_eog_token(token) {
-            break;
+            break FinishReason::Eos;
         }
 
         let piece = model
@@ -279,21 +380,26 @@ fn run_completion(model: &LlamaModel, prompt: &str, opts: RunOpts) -> Result<Str
 
         ctx.decode(&mut batch)
             .map_err(|e| InferError::Inference(format!("gen decode failed: {e}")))?;
-    }
+    };
 
     // llama.cpp emits UTF-8 byte sequences that can straddle token
     // boundaries. Decode once at the end with replacement so we never
     // return invalid UTF-8 to PHP.
-    Ok(String::from_utf8_lossy(&out_bytes).into_owned())
+    Ok(CompletionResult {
+        text: String::from_utf8_lossy(&out_bytes).into_owned(),
+        finish_reason,
+        tokens_generated: n_decoded,
+    })
 }
 
 // --- Option parsing helpers -------------------------------------------------
 //
-// Each helper takes the optional `$options` array passed from PHP. A missing
-// array (no second argument) and a missing key both yield `Ok(None)`. A key
-// that *is* present but of the wrong type is a hard error — callers see an
-// `InferException` with a useful message rather than the silent fallback to
-// a default that a `from_zval(...).unwrap_or(default)` would give.
+// Each helper takes the optional `$options` array passed from PHP to
+// `Model::load`. A missing array (no second argument) and a missing key
+// both yield `Ok(None)`. A key that *is* present but of the wrong type is
+// a hard error — callers see an `InferException` with a useful message
+// rather than the silent fallback to a default that a
+// `from_zval(...).unwrap_or(default)` would give.
 
 fn get_uint(opts: Option<&ZendHashTable>, key: &str) -> Result<Option<u32>, InferError> {
     let Some(zv) = opts.and_then(|o| o.get(key)) else {
@@ -317,23 +423,6 @@ fn get_uint(opts: Option<&ZendHashTable>, key: &str) -> Result<Option<u32>, Infe
         })
 }
 
-fn get_float(opts: Option<&ZendHashTable>, key: &str) -> Result<Option<f32>, InferError> {
-    let Some(zv) = opts.and_then(|o| o.get(key)) else {
-        return Ok(None);
-    };
-    // Accept both PHP floats and PHP ints — `1` and `1.0` should both work.
-    if let Some(f) = f64::from_zval(zv) {
-        return Ok(Some(f as f32));
-    }
-    if let Some(i) = i64::from_zval(zv) {
-        return Ok(Some(i as f32));
-    }
-    Err(InferError::InvalidOption {
-        name: key.into(),
-        reason: "expected float".into(),
-    })
-}
-
 fn get_bool(opts: Option<&ZendHashTable>, key: &str) -> Result<Option<bool>, InferError> {
     let Some(zv) = opts.and_then(|o| o.get(key)) else {
         return Ok(None);
@@ -344,84 +433,4 @@ fn get_bool(opts: Option<&ZendHashTable>, key: &str) -> Result<Option<bool>, Inf
             name: key.into(),
             reason: "expected bool".into(),
         })
-}
-
-// --- Reasoning-model output post-processing --------------------------------
-//
-// Reasoning models (Qwen3, DeepSeek R1, ...) wrap their internal monologue
-// in `<think>...</think>` blocks when invoked through their chat template.
-// Most application code only wants the final answer that follows the close
-// tag. We strip every complete `<think>...</think>` block we find, then
-// trim the leading whitespace the model habitually inserts before the
-// answer.
-//
-// If a `<think>` opens but never closes — typical when `max_tokens` runs
-// out mid-thought — we leave that suffix in place rather than discard the
-// whole tail. The alternative (drop everything from the open tag) would
-// silently return an empty string for an under-budgeted run; surfacing the
-// partial thought makes the budget problem obvious to the caller.
-
-fn strip_think_blocks(text: &str) -> String {
-    const OPEN: &str = "<think>";
-    const CLOSE: &str = "</think>";
-
-    let mut out = String::with_capacity(text.len());
-    let mut rest = text;
-    while let Some(start) = rest.find(OPEN) {
-        out.push_str(&rest[..start]);
-        let after_open = &rest[start + OPEN.len()..];
-        match after_open.find(CLOSE) {
-            Some(end) => rest = &after_open[end + CLOSE.len()..],
-            None => {
-                // Unclosed block. Keep the rest verbatim and bail.
-                out.push_str(&rest[start..]);
-                return out;
-            }
-        }
-    }
-    out.push_str(rest);
-    out.trim_start().to_string()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::strip_think_blocks;
-
-    #[test]
-    fn strip_passes_through_text_without_tags() {
-        assert_eq!(strip_think_blocks("Paris."), "Paris.");
-    }
-
-    #[test]
-    fn strip_removes_single_think_block_and_trims_leading_whitespace() {
-        let raw = "<think>Okay so 2+2 is 4.</think>\n\n2 + 2 = 4.";
-        assert_eq!(strip_think_blocks(raw), "2 + 2 = 4.");
-    }
-
-    #[test]
-    fn strip_removes_empty_think_block() {
-        // Qwen3's `/no_think` directive emits an empty block.
-        let raw = "<think>\n\n</think>\n\n2 + 2 = 4.";
-        assert_eq!(strip_think_blocks(raw), "2 + 2 = 4.");
-    }
-
-    #[test]
-    fn strip_handles_multiple_think_blocks() {
-        let raw = "<think>first</think>middle<think>second</think>end";
-        assert_eq!(strip_think_blocks(raw), "middleend");
-    }
-
-    #[test]
-    fn strip_preserves_unclosed_think_block() {
-        // Truncated mid-thought because of a stingy max_tokens.
-        let raw = "<think>Okay so the answer is";
-        assert_eq!(strip_think_blocks(raw), "<think>Okay so the answer is");
-    }
-
-    #[test]
-    fn strip_preserves_close_without_open() {
-        // No matching `<think>`, so `</think>` is just literal text.
-        let raw = "answer </think> trailing";
-        assert_eq!(strip_think_blocks(raw), "answer </think> trailing");
-    }
 }

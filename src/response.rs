@@ -8,13 +8,6 @@
 //!
 //! Reasoning is parsed once at construction time so repeated calls to
 //! `reasoning()` / `answer()` from PHP don't re-scan the string.
-//
-// `Response::new`, `split_thinking`, and the `FinishReason` variants
-// are crate-private helpers that get exercised the moment `Model::chat()`
-// (the next commit) is wired up. They are reachable from the `#[cfg(test)]`
-// suite below but not from `cargo build` output, so silence the
-// `dead_code` lint until the consumer lands.
-#![allow(dead_code)]
 
 use ext_php_rs::prelude::*;
 

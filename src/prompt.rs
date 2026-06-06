@@ -68,6 +68,17 @@ impl Message {
             content,
         }
     }
+
+    /// Cloned role string, used by `Model::chat()` to build the
+    /// `LlamaChatMessage` list it hands to `apply_chat_template`.
+    pub(crate) fn role_owned(&self) -> String {
+        self.role.clone()
+    }
+
+    /// Cloned content string, paired with `role_owned`.
+    pub(crate) fn content_owned(&self) -> String {
+        self.content.clone()
+    }
 }
 
 /// Ordered, immutable list of chat messages.
@@ -156,5 +167,10 @@ impl Prompt {
         let mut messages = self.messages.clone();
         messages.push(Message::new(role, content));
         Self { messages }
+    }
+
+    /// Rust-side slice accessor used by `Model::chat()`.
+    pub(crate) fn messages_slice(&self) -> &[Message] {
+        &self.messages
     }
 }
