@@ -185,6 +185,28 @@ Without one of those, you have to manually click *Update* on the
 Packagist package page after every release, which someone will
 forget to do.
 
+### Tags are immutable on Packagist
+
+Once Packagist has indexed a stable version (`vX.Y.Z` with no
+`-rc.N` / `-beta.N` suffix), the source/dist reference for that
+version is **locked**. Re-tagging the same name at a different
+commit gets rejected:
+
+> The displace/ext-infer package of which you are a maintainer had
+> an attempted update to version vX.Y.Z blocked, because a published
+> stable version's source/dist reference changed in your git
+> repository.
+
+If you need to ship a fix for a broken release, **always bump to the
+next patch version** (e.g. `v0.1.0` → `v0.1.1`). Even if no one has
+installed the broken tag yet, re-tagging breaks Packagist's
+immutability guarantee — for everyone, not just you.
+
+Prerelease tags (`v0.1.0-rc.1`, `v0.1.0-beta.2`) are *not* immutable
+on Packagist, so the RC dance in RELEASE.md's
+[verify section](#what-the-release-workflow-does) is safe to redo.
+Stable tags are not.
+
 ### Verifying the Packagist hook is working
 
 After a release publishes, the Packagist package page should show

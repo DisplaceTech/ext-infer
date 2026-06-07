@@ -164,28 +164,29 @@ jobs:
           version="$GITHUB_REF_NAME"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-          # Resolve binary suffix per OS.
+          # Cargo names the cdylib per host convention: `libinfer.dylib`
+          # on macOS, `libinfer.so` on Linux. PIE, however, looks for
+          # `{extension-name}.so` inside the archive on every platform —
+          # it doesn't know about `.dylib`. PHP itself is agnostic
+          # (dlopen takes a path, not a suffix), so flattening to `.so`
+          # everywhere is safe and is what PIE actually wants.
           if [ "${{ runner.os }}" = "macOS" ]; then
-            ext_in="dylib"
+            src="$PWD/target/release/libinfer.dylib"
           else
-            ext_in="so"
+            src="$PWD/target/release/libinfer.so"
           fi
-          src="$PWD/target/release/libinfer.$ext_in"
           test -f "$src" || { echo "missing $src"; exit 1; }
 
-          # PIE drops the in-archive file at PHP's extension-dir/{extension-name}.so,
-          # so naming the in-archive file `infer.$ext_in` keeps the install
-          # path tidy.
           stage="$RUNNER_TEMP/stage"
           mkdir -p "$stage"
-          cp "$src" "$stage/infer.$ext_in"
+          cp "$src" "$stage/infer.so"
 
           archive="php_infer-${version}_php${PHP_MINOR}-${ARCH}-${OS}-${LIBC}-nts.tgz"
           echo "archive=$archive" >> "$GITHUB_OUTPUT"
 
           # tar from inside the staging dir so the archive doesn't carry a
           # nested directory prefix — PIE expects the loadable at the root.
-          tar -C "$stage" -czf "$RUNNER_TEMP/$archive" "infer.$ext_in"
+          tar -C "$stage" -czf "$RUNNER_TEMP/$archive" "infer.so"
           echo "path=$RUNNER_TEMP/$archive" >> "$GITHUB_OUTPUT"
 
           # SHA-256 sidecar for downstream supply-chain verification.
