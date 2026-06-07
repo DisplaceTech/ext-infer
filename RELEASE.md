@@ -149,11 +149,56 @@ After CI is green:
    ## Known caveats
    - <e.g. "ZTS support compiles but is not stress-tested">
    ```
-4. Verify all six tarballs + sidecars are attached.
+4. Verify all 9 tarballs + 9 sidecars (18 files total) are attached.
 5. Hit *Publish release*.
 
-Publishing is the action that exposes the release to Packagist, and
-therefore to PIE.
+Publishing is the action that exposes the release to GitHub's public
+Releases API. Until you publish, drafts are visible only to repo
+maintainers — PIE, Packagist, and `gh release view` from a non-owner
+account all see nothing.
+
+## One-time Packagist registration
+
+PIE installs via Composer, which resolves packages through Packagist
+by default. The first time you ship `ext-infer`, register the package:
+
+1. Go to <https://packagist.org/login/> and sign in with GitHub.
+2. Click **Submit** in the top nav.
+3. Paste `https://github.com/DisplaceTech/ext-infer` into the repo
+   URL field and submit.
+4. Packagist reads `composer.json`, validates the `type: php-ext`
+   block, and registers the package as `displace/ext-infer`.
+
+That step is one-time. After it, every tag pushed to the repo needs
+to make it back to Packagist. Two ways:
+
+- **Recommended — connect your GitHub account once.** On Packagist's
+  profile page, link your GitHub account. Packagist auto-installs a
+  webhook on every repo you own, so every future tag triggers a
+  metadata refresh within seconds. Set-and-forget.
+- **Per-repo webhook.** If you don't want the account-wide hook:
+  GitHub → ext-infer settings → Webhooks → Add webhook. URL is
+  `https://packagist.org/api/github?username=<your-handle>&apiToken=<token>`
+  (token from Packagist's profile page). Push events only.
+
+Without one of those, you have to manually click *Update* on the
+Packagist package page after every release, which someone will
+forget to do.
+
+### Verifying the Packagist hook is working
+
+After a release publishes, the Packagist package page should show
+the new version within a minute or two. If it doesn't:
+
+```sh
+# Manual nudge from the maintainer's machine:
+curl -XPOST -H 'content-type:application/json' \
+  "https://packagist.org/api/update-package?username=<you>&apiToken=<token>" \
+  -d '{"repository":{"url":"https://github.com/DisplaceTech/ext-infer"}}'
+```
+
+If that updates Packagist but the auto-hook didn't fire, check the
+webhook delivery log under GitHub repo settings → Webhooks.
 
 ## PIE-side install (smoke test post-release)
 
