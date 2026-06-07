@@ -20,30 +20,22 @@ matter." Project status / surface description lives in
 | `Embedding` (vector math)              | shipped  |
 | `InferException` hierarchy             | shipped  |
 | PHPT suite (11 tests, 7 model-gated)   | shipped  |
-| CI matrix (8.3/8.4 × {macos, ubuntu})  | shipped  |
+| CI matrix (8.3/8.4/8.5 × {macos-arm64, ubuntu, ubuntu-arm64}) | shipped |
 | `composer.json` (PIE-compatible)       | shipped  |
-| Tag-triggered binary release workflow  | shipped, untested |
+| Tag-triggered binary release workflow  | shipped, exercised through v0.1.0 |
 | `RELEASE.md`                           | shipped  |
 | `examples/` (3 examples + READMEs)     | shipped  |
+| Documentation site (infer.displace.tech) | shipped, ~20 mdbook pages |
 | Apple Metal feature                    | available, not default |
 | ZTS-PHP support                        | enabled in composer.json, untested in CI |
 
+## Releases
+
+| Version | Date         | Notes                                                                                  |
+| ------- | ------------ | -------------------------------------------------------------------------------------- |
+| v0.1.0  | 2026-06-07   | First public release. Fluent chat / embeddings surface, 9 platform tarballs via PIE.   |
+
 ## Up next
-
-### Cut v0.1.0
-
-The first release exercises the release pipeline end-to-end and is
-the milestone for "stop relying on `-d extension=…` for everything."
-
-- [ ] Bump `Cargo.toml` to `0.1.0`.
-- [ ] Tag `v0.1.0`, push the tag.
-- [ ] Verify all six matrix legs of `.github/workflows/release.yml`
-      produce tarballs with the right PIE filenames + `.sha256`
-      sidecars.
-- [ ] Manually edit + publish the draft Release notes.
-- [ ] `pie install displace/ext-infer` on a clean box; confirm
-      `php -m | grep infer` and run `examples/hello-world.php`.
-- [ ] Document any issues found back into `RELEASE.md`.
 
 ### ZTS exercise
 
