@@ -6,16 +6,22 @@ name: Release
 # convention, and upload the artifact to the GitHub Release that the
 # tag created.
 #
-# Filename convention (per PIE docs, /docs/extension-maintainers.md):
+# Filename convention (verified against PIE 1.4.5):
 #
-#     php_{ExtensionName}-{Version}_php{PhpVersion}-{Arch}-{OS}-{Libc}-{Debug}-{TSMode}.{Format}
+#     php_{name}-{version}_php{minor}-{arch}-{os}-{libc}-{tsmode}.tgz
+#
+# Notably:
+#   - {version} keeps the leading `v` from the tag (PIE looks for `v0.1.0`).
+#   - {libc} is mandatory even on darwin (`bsdlibc`); Linux is `glibc`.
+#   - {tsmode} is explicit (`-nts` here, `-zts` when we add ZTS).
+#   - Extension is `.tgz`, not `.tar.gz`.
 #
 # For our 9-leg matrix (PHP 8.3/8.4/8.5 × {macos-arm64, linux-x86_64,
 # linux-arm64}) that means tarballs like:
 #
-#     php_infer-0.1.0_php8.5-arm64-darwin.tar.gz
-#     php_infer-0.1.0_php8.4-x86_64-linux-glibc.tar.gz
-#     php_infer-0.1.0_php8.3-arm64-linux-glibc.tar.gz
+#     php_infer-v0.1.0_php8.5-arm64-darwin-bsdlibc-nts.tgz
+#     php_infer-v0.1.0_php8.4-x86_64-linux-glibc-nts.tgz
+#     php_infer-v0.1.0_php8.3-arm64-linux-glibc-nts.tgz
 #
 # (NTS-only for now; ZTS support is enabled in composer.json but no widely
 # distributed ZTS PHP runner ships on the GitHub matrix yet — revisit when
@@ -42,25 +48,25 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # macos-arm64
+          # macos-arm64. PIE wants `bsdlibc` in the libc slot for darwin.
           - label: 'php8.3-arm64-darwin'
             runner: macos-14
             php: '8.3'
             arch: 'arm64'
             os: 'darwin'
-            libc: ''
+            libc: 'bsdlibc'
           - label: 'php8.4-arm64-darwin'
             runner: macos-14
             php: '8.4'
             arch: 'arm64'
             os: 'darwin'
-            libc: ''
+            libc: 'bsdlibc'
           - label: 'php8.5-arm64-darwin'
             runner: macos-14
             php: '8.5'
             arch: 'arm64'
             os: 'darwin'
-            libc: ''
+            libc: 'bsdlibc'
           # linux-x86_64
           - label: 'php8.3-x86_64-linux-glibc'
             runner: ubuntu-latest
@@ -140,9 +146,22 @@ jobs:
           PHP_MINOR: ${{ matrix.php }}
         run: |
           set -euo pipefail
-          # Compute version from the tag (strip leading "v") so the filename
-          # matches PIE's expectation regardless of what the maintainer typed.
-          version="${GITHUB_REF_NAME#v}"
+          # PIE matches archive names verbatim. The format it expects is
+          #
+          #   php_{name}-{version}_php{minor}-{arch}-{os}-{libc}-{tsmode}.{ext}
+          #
+          # with these gotchas (learned the hard way during the v0.1.0 cut):
+          #
+          #   - Version *includes* the leading `v` from the tag. PIE looks
+          #     for `v0.1.0`, not `0.1.0`.
+          #   - The libc segment is required, even on darwin. PIE asks
+          #     for `bsdlibc` there; Linux is `glibc` (or `musl`).
+          #   - TS-mode segment is explicit. Our binaries are NTS, so the
+          #     suffix is `-nts`. ZTS builds (when we ship them) will use
+          #     `-zts` in the same slot.
+          #   - Extension is `.tgz`, not `.tar.gz`. Same bytes, different
+          #     glob.
+          version="$GITHUB_REF_NAME"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
           # Resolve binary suffix per OS.
@@ -154,21 +173,14 @@ jobs:
           src="$PWD/target/release/libinfer.$ext_in"
           test -f "$src" || { echo "missing $src"; exit 1; }
 
-          # PIE expects the loadable to be named `infer.so` / `infer.dylib`
-          # in the archive — that's what gets dropped into the PHP extension
-          # directory under the `extension-name` from composer.json.
+          # PIE drops the in-archive file at PHP's extension-dir/{extension-name}.so,
+          # so naming the in-archive file `infer.$ext_in` keeps the install
+          # path tidy.
           stage="$RUNNER_TEMP/stage"
           mkdir -p "$stage"
           cp "$src" "$stage/infer.$ext_in"
 
-          # Tarball name per PIE's convention. The libc segment is empty on
-          # darwin (no Apple Mach-O libc family); we suppress the dangling
-          # dash with a small conditional.
-          libc_segment=""
-          if [ -n "$LIBC" ]; then
-            libc_segment="-$LIBC"
-          fi
-          archive="php_infer-${version}_php${PHP_MINOR}-${ARCH}-${OS}${libc_segment}.tar.gz"
+          archive="php_infer-${version}_php${PHP_MINOR}-${ARCH}-${OS}-${LIBC}-nts.tgz"
           echo "archive=$archive" >> "$GITHUB_OUTPUT"
 
           # tar from inside the staging dir so the archive doesn't carry a
@@ -176,8 +188,7 @@ jobs:
           tar -C "$stage" -czf "$RUNNER_TEMP/$archive" "infer.$ext_in"
           echo "path=$RUNNER_TEMP/$archive" >> "$GITHUB_OUTPUT"
 
-          # Also stash a SHA-256 alongside for downstream supply-chain
-          # verification once we publish a Packagist-or-similar listing.
+          # SHA-256 sidecar for downstream supply-chain verification.
           if command -v sha256sum >/dev/null 2>&1; then
             (cd "$RUNNER_TEMP" && sha256sum "$archive" > "$archive.sha256")
           else
