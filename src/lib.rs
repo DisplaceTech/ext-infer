@@ -19,6 +19,7 @@ mod error;
 mod grammar;
 mod model;
 mod prompt;
+mod rerank;
 mod response;
 
 use ext_php_rs::prelude::*;
@@ -29,6 +30,7 @@ pub use embedding::Embedding;
 pub use error::{InferException, InferenceException, ModelLoadException};
 pub use model::Model;
 pub use prompt::{Message, Prompt};
+pub use rerank::RerankModel;
 pub use response::Response;
 
 /// PHP module entry point.
@@ -52,4 +54,5 @@ pub fn get_module(module: ModuleBuilder) -> ModuleBuilder {
         .class::<Response>()
         .class::<Embedding>()
         .class::<Model>()
+        .class::<RerankModel>()
 }

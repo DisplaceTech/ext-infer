@@ -173,6 +173,69 @@ final class Prompt
     public function isEmpty(): bool {}
 }
 
+/**
+ * Second-stage relevance scoring over (query, document) pairs.
+ *
+ * Targets the Qwen3-Reranker GGUF family: the model judges each pair
+ * through its documented yes/no prompt and the score is the binary
+ * softmax `P(yes) / (P(yes) + P(no))` — calibrated, in (0, 1), higher is
+ * more relevant. The canonical pipeline is coarse recall via embeddings
+ * (`Model::embed()` + a vector index), then precision over the short
+ * candidate list with `rank()`.
+ */
+class RerankModel
+{
+    /** @throws \Displace\Infer\InferException Always — use `RerankModel::load()`. */
+    public function __construct() {}
+
+    /**
+     * Load a reranker GGUF (Qwen3-Reranker family) from disk.
+     *
+     * @param array<string, mixed> $options Recognised keys:
+     *                                      - `n_gpu_layers` (int, default 0)
+     *                                      - `use_mmap` (bool, default true)
+     *                                      - `use_mlock` (bool, default false)
+     *                                      - `n_ctx` (int, default 4096) — context budget per
+     *                                        scoring call (template + query + document)
+     *                                      - `instruction` (string) — task instruction embedded
+     *                                        in the judgment prompt; tailoring it to the corpus
+     *                                        measurably helps
+     *
+     * @throws \Displace\Infer\ModelLoadException If the file cannot be read, or the
+     *                                            model's vocabulary cannot express
+     *                                            single-token yes/no answers.
+     */
+    public static function load(string $path, array $options = []): self {}
+
+    /**
+     * Relevance of `$document` to `$query`, in (0, 1). Higher is more
+     * relevant; scores are calibrated enough to threshold.
+     *
+     * @throws \Displace\Infer\InferenceException If the pair overflows `n_ctx`,
+     *                                            or the model has been closed.
+     */
+    public function score(string $query, string $document): float {}
+
+    /**
+     * Score every document and return best-first rows shaped like
+     * `Displace\AI\Contracts\Reranker::rerank()`: `index` is the document's
+     * position in the input list. Ties keep input order.
+     *
+     * @param list<string> $documents
+     * @param int|null     $topK      Keep only the best `$topK` rows; `null` returns all.
+     *
+     * @return list<array{index: int, score: float}>
+     *
+     * @throws \Displace\Infer\InferException     If `$topK < 1`.
+     * @throws \Displace\Infer\InferenceException If a pair overflows `n_ctx`,
+     *                                            or the model has been closed.
+     */
+    public function rank(string $query, array $documents, ?int $topK = null): array {}
+
+    /** Release the underlying model weights. Idempotent. */
+    public function close(): void {}
+}
+
 class Model
 {
     /**

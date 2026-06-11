@@ -68,7 +68,7 @@ use crate::response::{FinishReason, Response};
 static BACKEND: OnceLock<LlamaBackend> = OnceLock::new();
 static BACKEND_INIT: Mutex<()> = Mutex::new(());
 
-fn backend() -> Result<&'static LlamaBackend, InferError> {
+pub(crate) fn backend() -> Result<&'static LlamaBackend, InferError> {
     if let Some(b) = BACKEND.get() {
         return Ok(b);
     }
@@ -94,7 +94,6 @@ fn backend() -> Result<&'static LlamaBackend, InferError> {
     let _ = BACKEND.set(backend);
     Ok(BACKEND.get().expect("backend just set"))
 }
-
 
 // --- Model ------------------------------------------------------------------
 
@@ -701,7 +700,7 @@ fn zval_to_json(zv: &ext_php_rs::types::Zval) -> Result<serde_json::Value, Infer
     })
 }
 
-fn get_uint(opts: Option<&ZendHashTable>, key: &str) -> Result<Option<u32>, InferError> {
+pub(crate) fn get_uint(opts: Option<&ZendHashTable>, key: &str) -> Result<Option<u32>, InferError> {
     let Some(zv) = opts.and_then(|o| o.get(key)) else {
         return Ok(None);
     };
@@ -723,7 +722,10 @@ fn get_uint(opts: Option<&ZendHashTable>, key: &str) -> Result<Option<u32>, Infe
         })
 }
 
-fn get_bool(opts: Option<&ZendHashTable>, key: &str) -> Result<Option<bool>, InferError> {
+pub(crate) fn get_bool(
+    opts: Option<&ZendHashTable>,
+    key: &str,
+) -> Result<Option<bool>, InferError> {
     let Some(zv) = opts.and_then(|o| o.get(key)) else {
         return Ok(None);
     };
@@ -735,7 +737,10 @@ fn get_bool(opts: Option<&ZendHashTable>, key: &str) -> Result<Option<bool>, Inf
         })
 }
 
-fn get_string(opts: Option<&ZendHashTable>, key: &str) -> Result<Option<String>, InferError> {
+pub(crate) fn get_string(
+    opts: Option<&ZendHashTable>,
+    key: &str,
+) -> Result<Option<String>, InferError> {
     let Some(zv) = opts.and_then(|o| o.get(key)) else {
         return Ok(None);
     };
