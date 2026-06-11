@@ -98,16 +98,24 @@ between "match" and "not match" is harder to draw.
 
 In production, the in-memory dictionary in the example above doesn't
 scale past a few thousand documents — the search loop is O(corpus
-size). Two upgrade paths:
+size). Three upgrade paths:
 
-- **Persist embeddings to disk** (a JSON file, SQLite blob column,
-  pickle equivalent). Saves the embed-time cost on subsequent runs.
+- **Stay in-process with
+  [ext-turbovec](https://github.com/DisplaceTech/ext-turbovec)** —
+  a quantized, SIMD-accelerated index from the same stack. 100K
+  1024-dim documents fit in ~50MB resident, persist with
+  `write()`/`load()`, and search in microseconds. The natural next
+  step when this recipe outgrows the PHP loop.
+- **Persist embeddings to disk** (a JSON file, SQLite blob column).
+  Saves the embed-time cost on subsequent runs but keeps the O(n)
+  scan.
 - **Index with a vector database**: `pgvector` (PostgreSQL extension),
-  `sqlite-vec`, Qdrant, Pinecone. They handle the nearest-neighbor
-  search far more efficiently than a PHP loop.
+  `sqlite-vec`, MySQL 9 `VECTOR`. Right when the database must remain
+  the system of record for vectors too.
 
-See [RAG over markdown](./rag-with-php.md) for a worked example using
-`sqlite-vec`.
+See [Semantic search with ext-infer](https://turbovec.displace.tech/recipes/semantic-search-with-ext-infer.html)
+for the ext-turbovec pairing, or [RAG over markdown](./rag-with-php.md)
+for a worked example using `sqlite-vec`.
 
 ## Re-ranking with a chat model
 

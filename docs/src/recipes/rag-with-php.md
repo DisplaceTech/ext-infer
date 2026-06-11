@@ -94,9 +94,26 @@ $embedder->close();
 ```
 
 Run once to build the index, again whenever your notes change. For
-larger corpora, chunk each file into ~500-token sections and embed
-each chunk separately — sentence-level granularity gives better
-retrieval than whole-file vectors.
+larger corpora, chunk each file and embed each chunk separately —
+section-level granularity gives better retrieval than whole-file
+vectors. [`displace/ai-toolkit`](https://github.com/DisplaceTech/ai-toolkit)
+ships the chunkers so you don't hand-roll the splitting:
+
+```php
+use Displace\AI\Toolkit\Text\RecursiveCharacterChunker;
+
+$chunker = new RecursiveCharacterChunker(size: 2000, overlap: 200);
+
+foreach ($chunker->chunk($body) as $i => $chunk) {
+    $vector = $embedder->embed($chunk)->normalize()->vector();
+    // store with a composite key: document id + chunk position
+}
+```
+
+The recursive chunker splits on paragraphs first and only falls back
+to finer boundaries when a paragraph alone exceeds the budget, so
+chunks track the document's own structure. (~2000 characters ≈ 500
+tokens of English text.)
 
 ## Retrieval + generation
 
@@ -195,9 +212,16 @@ will happily make up plausible answers without it.
   for the chat-model-as-reranker pattern.
 - **Streaming responses** — `Model::chat()` is currently synchronous.
   See the [roadmap](https://github.com/DisplaceTech/ext-infer/blob/main/PLAN.md).
-- **Production-grade chunking** — markdown-aware splitting that
-  respects code blocks, headers, lists. Worth a library; not in scope
-  for ext-infer itself.
+- **Markdown-aware chunking** — splitting that respects code blocks,
+  headers, and lists. The structure-aware chunkers in
+  [`displace/ai-toolkit`](https://github.com/DisplaceTech/ai-toolkit)
+  get most of the way there by preferring paragraph boundaries;
+  heading-aware splitting is on its roadmap.
+- **Engine-agnostic wiring** — if you want application code that
+  doesn't name `Displace\Infer\Model` directly (swappable embedders,
+  framework integration), code against the
+  [`displace/ai-contracts`](https://github.com/DisplaceTech/ai-contracts)
+  interfaces and wrap the model in a thin adapter.
 
 ## Next
 
