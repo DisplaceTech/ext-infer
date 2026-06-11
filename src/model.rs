@@ -95,7 +95,6 @@ fn backend() -> Result<&'static LlamaBackend, InferError> {
     Ok(BACKEND.get().expect("backend just set"))
 }
 
-const BATCH_CAPACITY: usize = 512;
 
 // --- Model ------------------------------------------------------------------
 
@@ -427,8 +426,10 @@ fn run_completion(
 
     // Submit the prompt as a single batch, asking for logits on the last
     // token only — that's the position from which we'll sample the first
-    // generated token.
-    let mut batch = LlamaBatch::new(BATCH_CAPACITY, 1);
+    // generated token. The batch is sized to the prompt: a fixed capacity
+    // would silently cap how much context a caller can stuff into the
+    // prompt (RAG context blocks blow past any constant fast).
+    let mut batch = LlamaBatch::new(prompt_tokens.len(), 1);
     let last_prompt_index = prompt_len - 1;
     for (i, token) in prompt_tokens.into_iter().enumerate() {
         let i = i as i32;
@@ -522,7 +523,6 @@ fn run_completion(
 // --- Embedding core ---------------------------------------------------------
 
 const EMBED_DEFAULT_N_CTX: u32 = 2048;
-const EMBED_BATCH_CAPACITY: usize = 512;
 
 /// Generate a single embedding vector for `text` using the given pooling.
 ///
@@ -564,7 +564,7 @@ fn run_embedding(
         )));
     }
 
-    let mut batch = LlamaBatch::new(EMBED_BATCH_CAPACITY, 1);
+    let mut batch = LlamaBatch::new(tokens.len(), 1);
     let last = token_count - 1;
     for (i, token) in tokens.into_iter().enumerate() {
         let i = i as i32;
