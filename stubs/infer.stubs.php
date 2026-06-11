@@ -43,6 +43,16 @@ final class Embedding
     /** Vector length — the loaded model's `n_embd`. */
     public function dimensions(): int {}
 
+    /**
+     * The embedding as a packed little-endian float32 binary string —
+     * byte-identical to `pack('g*', ...$embedding->vector())`, the format
+     * every Displace vector API speaks. The bytes are produced from the
+     * Rust-held float32 vector, so coordinates are never inflated into
+     * PHP values. Prefer this over `vector()` whenever the destination
+     * wants packed bytes (`Displace\Vector` indexes, ...).
+     */
+    public function packed(): string {}
+
     /** L2 norm of the vector. */
     public function norm(): float {}
 

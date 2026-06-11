@@ -9,6 +9,7 @@
 //! so f32 → f64 is lossless and the conversion happens in ext-php-rs's
 //! `IntoZval` impl for `Vec<f32>`.
 
+use ext_php_rs::binary::Binary;
 use ext_php_rs::prelude::*;
 
 use crate::error::InferError;
@@ -45,6 +46,23 @@ impl Embedding {
     /// Vector length — equivalent to the embedding model's hidden size.
     pub fn dimensions(&self) -> usize {
         self.vector.len()
+    }
+
+    /// The embedding as a packed little-endian float32 binary string —
+    /// byte-identical to `pack('g*', ...$embedding->vector())` and the
+    /// format every Displace vector API speaks (`Displace\Vector`
+    /// indexes, `Displace\AI\Contracts\Embedder`, ...).
+    ///
+    /// This is the zero-inflation handoff: the bytes are produced
+    /// directly from the f32 vector held on the Rust side, so the
+    /// coordinates are never materialized as PHP zvals. Prefer this over
+    /// `vector()` whenever the destination wants packed bytes.
+    pub fn packed(&self) -> Binary<u8> {
+        let mut bytes = Vec::with_capacity(self.vector.len() * 4);
+        for v in &self.vector {
+            bytes.extend_from_slice(&v.to_le_bytes());
+        }
+        Binary::new(bytes)
     }
 
     /// L2 norm of the vector. Useful for verifying that an upstream model
