@@ -30,8 +30,10 @@ like `Prompt::system(...)->withUser(...)`, not a string of `<|im_start|>`
 tokens.
 
 - 💬 **Chat completions** via an immutable `Prompt` builder that renders through the model's embedded template — no manual `<|im_start|>` plumbing.
+- 🧱 **Structured output** — pass a JSON Schema (or raw GBNF grammar) and sampling is constrained so malformed output is *impossible*, not retried. A 0.6B model becomes a dependable extractor.
 - 🧠 **Reasoning-model aware** — `Response::answer()` and `Response::reasoning()` split Qwen3 / R1-style `<think>…</think>` output automatically.
-- 📊 **Embeddings** — `Model::embed()` returns an `Embedding` with `dimensions()`, `normalize()`, `cosineSimilarity()` built in.
+- 📊 **Embeddings** — `Model::embed()` returns an `Embedding` with `dimensions()`, `normalize()`, `cosineSimilarity()`, and `packed()` (zero-copy handoff to vector indexes) built in.
+- 🎯 **Reranking** — `RerankModel` scores (query, document) pairs through Qwen3-Reranker's calibrated yes/no judgment; completes the embed → rerank two-stage retrieval pipeline.
 - ⚡ **In-process** — no subprocess fork, no IPC, no daemon. Latency is whatever the model takes to decode.
 - 🛠️ **Apple Metal** acceleration is opt-in (`make release FEATURES=metal`); CPU is the portable default.
 - 🧵 **Thread-safe** — `LlamaBackend` is a `Sync`-guarded singleton and each call builds its own context, so ZTS PHP + `parallel` works by design.
@@ -100,9 +102,9 @@ out of scope for v0.1.
 
 ## Roadmap
 
-**Shipped** &nbsp; chat completions · raw completions · embeddings · reasoning split · typed exceptions · PHPT suite · CI matrix · PIE-compatible `composer.json` · tag-triggered binary release workflow.
+**Shipped** &nbsp; chat completions · raw completions · grammar/JSON-Schema constrained generation · embeddings (+ packed float32 output) · `RerankModel` · reasoning split · typed exceptions · PHPT suite · CI matrix · PIE-compatible `composer.json` · tag-triggered binary release workflow · THIRD-PARTY-NOTICES + `cargo about` license manifest.
 
-**Next** &nbsp; first `v0.1.0` release · streaming completions · KV-cache reuse via reusable `Session` objects · stop-string support · tool calling · continuous batching · Apple Metal default on macos-arm64.
+**Next (v0.3+)** &nbsp; streaming completions · KV-cache reuse via reusable `Session` objects · stop-string support · LoRA adapters · tool calling · Apple Metal default on macos-arm64.
 
 See [`PLAN.md`](PLAN.md) for the current planning doc and [`RELEASE.md`](RELEASE.md)
 for the cut-a-release flow.

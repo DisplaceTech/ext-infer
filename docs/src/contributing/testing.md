@@ -29,15 +29,18 @@ What that command actually does:
    `.so` / `.dylib` is loaded.
 
 Tests gated on a real model use the `INFER_TEST_MODEL` environment
-variable:
+variable; the reranker tests use `INFER_TEST_RERANK_MODEL`:
 
 ```sh
-INFER_TEST_MODEL=$PWD/models/Qwen3-0.6B-Q8_0.gguf make test
+INFER_TEST_MODEL=$PWD/models/Qwen3-0.6B-Q8_0.gguf \
+INFER_TEST_RERANK_MODEL=$PWD/models/Qwen3-Reranker-0.6B-Q8_0.gguf \
+    make test
 ```
 
-Without the variable, model-gated tests skip cleanly. CI runs in this
-"no model" mode by default; setting `INFER_TEST_MODEL` runs the full
-suite.
+Without the variables, model-gated tests skip cleanly. CI runs in this
+"no model" mode by default; setting both variables runs the full
+suite. The reranker model is the official llama.cpp conversion:
+[`ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF`](https://huggingface.co/ggml-org/Qwen3-Reranker-0.6B-Q8_0-GGUF).
 
 ### Writing a PHPT test
 

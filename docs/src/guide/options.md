@@ -44,6 +44,14 @@ ident verbatim, so you write `maxTokens: 256` (camelCase, per PSR-12).
 | `nCtx`        | `int`                 | `2048`  | [Chat completions](./chat.md)             |
 | `temperature` | `float`               | `0.0`   | [Chat completions](./chat.md)             |
 | `seed`        | `int`                 | `1234`  | [Chat completions](./chat.md)             |
+| `options`     | `array`               | `[]`    | [Structured output](./structured-output.md) |
+
+The trailing `options` array accepts (keys are mutually exclusive):
+
+| Key       | Type            | Effect                                            |
+| --------- | --------------- | ------------------------------------------------- |
+| `grammar` | `string`        | GBNF grammar constraining every sampled token     |
+| `schema`  | `array\|string` | JSON Schema (PHP array or JSON text) compiled to GBNF |
 
 ### Behavior
 
@@ -67,6 +75,7 @@ Same named-argument shape as `chat()` plus `addBos`.
 | `temperature` | `float` | `0.0`   | [Chat completions](./chat.md)             |
 | `seed`        | `int`   | `1234`  | [Chat completions](./chat.md)             |
 | `addBos`      | `bool`  | `true`  | [Raw completions → addBos](./raw.md#addbos) |
+| `options`     | `array` | `[]`    | Same `grammar`/`schema` keys as [`chat()`](#modelchatprompt-) |
 
 ## `Model::embed($text)`
 
@@ -85,6 +94,7 @@ than mutating.
 | Method                                 | Returns                  |
 | -------------------------------------- | ------------------------ |
 | `vector()`                             | `list<float>`            |
+| `packed()`                             | `string` — little-endian float32, `pack('g*')`-identical |
 | `dimensions()`                         | `int`                    |
 | `norm()`                               | `float`                  |
 | `normalize()`                          | new `Embedding`          |
@@ -93,6 +103,26 @@ than mutating.
 `cosineSimilarity` throws [`InferenceException`](../reference/exceptions.md)
 on a dimension mismatch — see
 [Embeddings → vector math](./embeddings.md#vector-math-built-in).
+
+## `RerankModel::load($path, $options)`
+
+Same array shape as `Model::load`, plus reranker-specific keys.
+
+| Key            | Type     | Default | See                              |
+| -------------- | -------- | ------- | -------------------------------- |
+| `n_gpu_layers` | `int`    | `0`     | [Performance tuning](../advanced/performance.md) |
+| `use_mmap`     | `bool`   | `true`  | [Performance tuning](../advanced/performance.md) |
+| `use_mlock`    | `bool`   | `false` | [Performance tuning](../advanced/performance.md) |
+| `n_ctx`        | `int`    | `4096`  | [Reranking → sizing](./reranking.md#sizing-and-budgets) |
+| `instruction`  | `string` | model-card default | [Reranking → instruction](./reranking.md#the-instruction-option) |
+
+## `RerankModel` methods
+
+| Method                                      | Returns                  |
+| ------------------------------------------- | ------------------------ |
+| `score(string $query, string $document)`    | `float` in `(0, 1)`      |
+| `rank(string $query, array $documents, ?int $topK = null)` | `list<array{index: int, score: float}>`, best-first |
+| `close()`                                   | `void` (idempotent)      |
 
 ## `Prompt`
 

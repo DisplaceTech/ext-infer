@@ -13,7 +13,9 @@
 - [Prompts](./guide/prompts.md)
 - [Chat completions](./guide/chat.md)
 - [Raw completions](./guide/raw.md)
+- [Structured output](./guide/structured-output.md)
 - [Embeddings](./guide/embeddings.md)
+- [Reranking](./guide/reranking.md)
 - [Choosing a model](./guide/models.md)
 - [Options reference](./guide/options.md)
 

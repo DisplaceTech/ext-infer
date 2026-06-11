@@ -14,12 +14,16 @@ matter." Project status / surface description lives in
 | `Model::chat(Prompt, …): Response`     | shipped  |
 | `Model::raw(string, …): string`        | shipped  |
 | `Model::embed(string): Embedding`      | shipped  |
+| Grammar/JSON-Schema constrained generation (`options` on chat/raw) | shipped (v0.2) |
+| `Embedding::packed()` (zero-inflation float32 output) | shipped (v0.2) |
+| `RerankModel` (Qwen3-Reranker yes/no logit scoring) | shipped (v0.2) |
+| THIRD-PARTY-NOTICES + `cargo about` release manifest | shipped (v0.2) |
 | `Prompt` (immutable builder)           | shipped  |
 | `Message` (read-only)                  | shipped  |
 | `Response` (reasoning/answer split)    | shipped  |
 | `Embedding` (vector math)              | shipped  |
 | `InferException` hierarchy             | shipped  |
-| PHPT suite (11 tests, 7 model-gated)   | shipped  |
+| PHPT suite (15 tests, model-gated where needed) | shipped  |
 | CI matrix (8.3/8.4/8.5 × {macos-arm64, ubuntu, ubuntu-arm64}) | shipped |
 | `composer.json` (PIE-compatible)       | shipped  |
 | Tag-triggered binary release workflow  | shipped, exercised through v0.1.0 |

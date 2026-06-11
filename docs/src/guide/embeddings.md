@@ -111,6 +111,26 @@ dimensions: 1024 vs 384
 That's deliberate — comparing across model families is almost always a
 bug, and silently returning a number would hide it.
 
+### Packed output for vector indexes
+
+`packed()` returns the vector as a packed little-endian float32 binary
+string — byte-identical to `pack('g*', ...$emb->vector())` and the
+format every Displace vector API speaks
+([ext-turbovec](https://github.com/DisplaceTech/ext-turbovec) indexes,
+the [`ai-contracts`](https://github.com/DisplaceTech/ai-contracts)
+`Embedder` interface):
+
+```php
+// embed → index, no PHP float arrays anywhere in between:
+$index->addWithIds($model->embed($text)->normalize()->packed(), [$id]);
+```
+
+The bytes are produced straight from the float32 vector held on the
+Rust side, so coordinates are never inflated into PHP values — at
+1024 dimensions that's the difference between one 4KB string and a
+thousand zvals per document. Prefer `packed()` over `vector()`
+whenever the destination wants bytes.
+
 ### Why normalize before comparing?
 
 Cosine similarity ignores magnitude — it compares *direction*. If

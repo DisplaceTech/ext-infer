@@ -25,6 +25,7 @@ final class Model
         int   $nCtx        = 2048,
         float $temperature = 0.0,
         int   $seed        = 1234,
+        array $options     = [],   // ['grammar' => gbnf] xor ['schema' => jsonSchema]
     ): \Displace\Infer\Response;
 
     public function raw(
@@ -34,6 +35,7 @@ final class Model
         float  $temperature = 0.0,
         int    $seed        = 1234,
         bool   $addBos      = true,
+        array  $options     = [],  // same grammar/schema keys as chat()
     ): string;
 
     public function embed(
@@ -48,8 +50,37 @@ final class Model
 (safe to call from `finally` blocks).
 
 See [Choosing a model](../guide/models.md), [Chat completions](../guide/chat.md),
-[Raw completions](../guide/raw.md), [Embeddings](../guide/embeddings.md),
+[Raw completions](../guide/raw.md),
+[Structured output](../guide/structured-output.md),
+[Embeddings](../guide/embeddings.md),
 and [Options reference](../guide/options.md).
+
+## `Displace\Infer\RerankModel`
+
+```php
+final class RerankModel
+{
+    public static function load(
+        string $path,
+        array  $options = [],  // n_gpu_layers, use_mmap, use_mlock, n_ctx, instruction
+    ): self;
+
+    public function score(string $query, string $document): float;  // (0, 1)
+
+    /**
+     * @param list<string> $documents
+     * @return list<array{index: int, score: float}>  best-first
+     */
+    public function rank(string $query, array $documents, ?int $topK = null): array;
+
+    public function close(): void;
+}
+```
+
+`new RerankModel()` throws — use `RerankModel::load()`. Targets the
+Qwen3-Reranker GGUF family; `rank()`'s rows are shaped like
+`Displace\AI\Contracts\Reranker::rerank()`. See
+[Reranking](../guide/reranking.md).
 
 ## `Displace\Infer\Prompt`
 
@@ -112,6 +143,8 @@ final class Embedding
     /** @return list<float> */
     public function vector(): array;
 
+    public function packed(): string;  // little-endian float32, pack('g*')-identical
+
     public function dimensions(): int;
     public function norm(): float;
     public function normalize(): self;
@@ -148,6 +181,7 @@ subclass.
   instance.
 - **Sampling args are named, never positional.** `Model::chat()` and
   `Model::raw()` use PHP 8 named arguments
-  (`maxTokens: 256, temperature: 0.7`) — not an options array. Load
-  options *are* an array because they're rare and compose with
-  config-from-disk patterns.
+  (`maxTokens: 256, temperature: 0.7`). Load options — and the
+  constraint options (`grammar`/`schema`) on `chat()`/`raw()` — *are*
+  arrays because they're rare and compose with config-from-disk
+  patterns.
