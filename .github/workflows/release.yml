@@ -55,7 +55,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Install cargo-about
-        run: cargo install cargo-about --locked
+        # The `cli` feature gates the binary itself in recent releases and
+        # is no longer a default feature.
+        run: cargo install cargo-about --locked --features cli
 
       - name: Generate manifest
         run: cargo about generate about.hbs -o THIRD-PARTY-LICENSES.html
