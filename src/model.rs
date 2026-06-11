@@ -53,6 +53,7 @@ use llama_cpp_2::sampling::LlamaSampler;
 
 use crate::embedding::Embedding;
 use crate::error::InferError;
+use crate::grammar::json_schema_to_gbnf;
 use crate::prompt::Prompt;
 use crate::response::{FinishReason, Response};
 
@@ -214,6 +215,15 @@ impl Model {
     ///
     /// Camel-cased parameter idents are intentional: PHP named-arguments use
     /// the parameter name verbatim and the PSR-12 convention is camelCase.
+    ///
+    /// Recognised `$options` keys (constraint tuning is rare enough to stay
+    /// out of the named-argument surface):
+    /// - `grammar` (string) — a GBNF grammar; sampling is constrained so
+    ///   the output always matches it.
+    /// - `schema` (array|string) — a JSON Schema (PHP array or JSON text),
+    ///   compiled to GBNF internally. The supported subset is documented
+    ///   on the website; unsupported keywords throw rather than silently
+    ///   under-constraining. Mutually exclusive with `grammar`.
     #[php(defaults(maxTokens = 128, nCtx = 2048, temperature = 0.0, seed = 1234))]
     pub fn chat(
         &self,
@@ -222,6 +232,7 @@ impl Model {
         nCtx: u32,
         temperature: f32,
         seed: u32,
+        options: Option<&ZendHashTable>,
     ) -> PhpResult<Response> {
         let model = self.inner.as_ref().ok_or(InferError::Closed)?;
 
@@ -261,6 +272,7 @@ impl Model {
                 temperature,
                 seed,
                 add_bos: false,
+                grammar: get_grammar(options)?,
             },
         )?;
 
@@ -275,6 +287,12 @@ impl Model {
     /// control over the prompt string (custom templates, base models, ...).
     /// Returns the generated text as a plain string — no reasoning split,
     /// no `Response` wrapper. If you want any of that, use `chat()`.
+    ///
+    /// `$options` accepts the same `grammar` / `schema` keys as `chat()`.
+    // The parameter list *is* the public PHP API (each one is a PHP named
+    // argument), so it can't be bundled into an options struct without
+    // changing the userland surface.
+    #[allow(clippy::too_many_arguments)]
     #[php(defaults(
         maxTokens = 128,
         nCtx = 2048,
@@ -290,6 +308,7 @@ impl Model {
         temperature: f32,
         seed: u32,
         addBos: bool,
+        options: Option<&ZendHashTable>,
     ) -> PhpResult<String> {
         let model = self.inner.as_ref().ok_or(InferError::Closed)?;
         let result = run_completion(
@@ -301,6 +320,7 @@ impl Model {
                 temperature,
                 seed,
                 add_bos: addBos,
+                grammar: get_grammar(options)?,
             },
         )?;
         Ok(result.text)
@@ -349,6 +369,9 @@ struct RunOpts {
     temperature: f32,
     seed: u32,
     add_bos: bool,
+    /// GBNF grammar constraining the sampler, already compiled from a JSON
+    /// Schema when the caller used the `schema` option.
+    grammar: Option<String>,
 }
 
 /// What `run_completion` returns. Carries enough metadata for `Response` to
@@ -418,14 +441,34 @@ fn run_completion(
         .map_err(|e| InferError::Inference(format!("prompt decode failed: {e}")))?;
 
     // Sampling chain: greedy when temperature == 0, otherwise temperature +
-    // distribution sampling seeded for reproducibility.
-    let mut sampler = if opts.temperature <= 0.0 {
-        LlamaSampler::chain_simple([LlamaSampler::greedy()])
-    } else {
-        LlamaSampler::chain_simple([
+    // distribution sampling seeded for reproducibility. A grammar sampler,
+    // when present, goes *first* in the chain: it masks every token that
+    // would violate the grammar before the actual sampling step picks from
+    // what's left. Once the grammar's root rule is fully matched, only
+    // end-of-generation tokens stay legal, so constrained runs finish with
+    // `FinishReason::Eos` like any other completion.
+    let grammar_sampler = opts
+        .grammar
+        .as_deref()
+        .map(|g| {
+            LlamaSampler::grammar(model, g, "root").map_err(|e| InferError::InvalidOption {
+                name: "grammar".into(),
+                reason: format!("llama.cpp rejected the GBNF grammar: {e}"),
+            })
+        })
+        .transpose()?;
+    let mut sampler = match (grammar_sampler, opts.temperature <= 0.0) {
+        (Some(g), true) => LlamaSampler::chain_simple([g, LlamaSampler::greedy()]),
+        (Some(g), false) => LlamaSampler::chain_simple([
+            g,
             LlamaSampler::temp(opts.temperature),
             LlamaSampler::dist(opts.seed),
-        ])
+        ]),
+        (None, true) => LlamaSampler::chain_simple([LlamaSampler::greedy()]),
+        (None, false) => LlamaSampler::chain_simple([
+            LlamaSampler::temp(opts.temperature),
+            LlamaSampler::dist(opts.seed),
+        ]),
     };
 
     let mut out_bytes: Vec<u8> = Vec::new();
@@ -438,8 +481,13 @@ fn run_completion(
             break FinishReason::Length;
         }
 
+        // `sample()` wraps `llama_sampler_sample`, which already *accepts*
+        // the chosen token into every sampler in the chain — do not call
+        // `accept()` again here. A second accept is invisible with the
+        // stateless greedy/temp/dist samplers but advances a stateful
+        // sampler (grammar!) twice per token, desyncing it from the actual
+        // output until llama.cpp aborts on `GGML_ASSERT(!stacks.empty())`.
         let token = sampler.sample(&ctx, batch.n_tokens() - 1);
-        sampler.accept(token);
 
         if model.is_eog_token(token) {
             break FinishReason::Eos;
@@ -552,6 +600,106 @@ fn run_embedding(
 // a hard error — callers see an `InferException` with a useful message
 // rather than the silent fallback to a default that a
 // `from_zval(...).unwrap_or(default)` would give.
+
+/// Resolve the `grammar` / `schema` keys of a `chat()` / `raw()` options
+/// array into a ready-to-use GBNF string. The two keys are mutually
+/// exclusive: `grammar` is handed to llama.cpp verbatim, `schema` (a JSON
+/// Schema as a PHP array or JSON text) is compiled via
+/// [`json_schema_to_gbnf`].
+fn get_grammar(opts: Option<&ZendHashTable>) -> Result<Option<String>, InferError> {
+    let grammar = get_string(opts, "grammar")?;
+    let schema_zv = opts.and_then(|o| o.get("schema"));
+
+    if grammar.is_some() && schema_zv.is_some() {
+        return Err(InferError::InvalidOption {
+            name: "schema".into(),
+            reason: "'grammar' and 'schema' are mutually exclusive — pass one".into(),
+        });
+    }
+    if let Some(g) = &grammar {
+        if g.trim().is_empty() {
+            return Err(InferError::InvalidOption {
+                name: "grammar".into(),
+                reason: "grammar string is empty".into(),
+            });
+        }
+    }
+
+    let Some(zv) = schema_zv else {
+        return Ok(grammar);
+    };
+
+    let schema: serde_json::Value = if let Some(json_text) = zv.string() {
+        serde_json::from_str(&json_text).map_err(|e| InferError::InvalidOption {
+            name: "schema".into(),
+            reason: format!("schema string is not valid JSON: {e}"),
+        })?
+    } else if zv.is_array() {
+        zval_to_json(zv)?
+    } else {
+        return Err(InferError::InvalidOption {
+            name: "schema".into(),
+            reason: "expected a JSON Schema as an array or a JSON string".into(),
+        });
+    };
+
+    Ok(Some(json_schema_to_gbnf(&schema)?))
+}
+
+/// Recursively convert a PHP value into `serde_json::Value` — the bridge
+/// that lets callers write `['schema' => ['type' => 'object', ...]]` with
+/// plain PHP arrays. Sequential arrays become JSON arrays, everything else
+/// becomes a JSON object, mirroring `json_encode()`.
+fn zval_to_json(zv: &ext_php_rs::types::Zval) -> Result<serde_json::Value, InferError> {
+    use serde_json::Value;
+
+    if zv.is_null() {
+        return Ok(Value::Null);
+    }
+    if let Some(b) = zv.bool() {
+        return Ok(Value::Bool(b));
+    }
+    if let Some(n) = zv.long() {
+        return Ok(Value::Number(n.into()));
+    }
+    if let Some(f) = zv.double() {
+        return serde_json::Number::from_f64(f)
+            .map(Value::Number)
+            .ok_or_else(|| InferError::InvalidOption {
+                name: "schema".into(),
+                reason: "schema contains a non-finite float (NaN/Inf)".into(),
+            });
+    }
+    if let Some(s) = zv.string() {
+        return Ok(Value::String(s));
+    }
+    if let Some(table) = zv.array() {
+        if table.has_sequential_keys() {
+            let mut items = Vec::with_capacity(table.len());
+            for value in table.values() {
+                items.push(zval_to_json(value)?);
+            }
+            return Ok(Value::Array(items));
+        }
+        let mut map = serde_json::Map::with_capacity(table.len());
+        for (key, value) in table.iter() {
+            let key: String = key.try_into().map_err(|_| InferError::InvalidOption {
+                name: "schema".into(),
+                reason: "schema array key is not representable as a string".into(),
+            })?;
+            map.insert(key, zval_to_json(value)?);
+        }
+        return Ok(Value::Object(map));
+    }
+
+    Err(InferError::InvalidOption {
+        name: "schema".into(),
+        reason: format!(
+            "schema contains a value of unsupported type {:?}",
+            zv.get_type()
+        ),
+    })
+}
 
 fn get_uint(opts: Option<&ZendHashTable>, key: &str) -> Result<Option<u32>, InferError> {
     let Some(zv) = opts.and_then(|o| o.get(key)) else {

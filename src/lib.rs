@@ -16,6 +16,7 @@
 
 mod embedding;
 mod error;
+mod grammar;
 mod model;
 mod prompt;
 mod response;

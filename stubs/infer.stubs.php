@@ -195,11 +195,23 @@ class Model
      * (Qwen3, Llama 3, … all ship a Jinja template inside the GGUF), so
      * callers never need to write `<|im_start|>` tokens by hand.
      *
+     * Recognised `$options` keys:
+     * - `grammar` (string) — a GBNF grammar; sampling is constrained so the
+     *   output always matches it.
+     * - `schema` (array|string) — a JSON Schema (PHP array or JSON text)
+     *   compiled to GBNF internally. Supported subset: object/properties
+     *   (all properties required), array/items (`minItems` 0 or 1), scalar
+     *   types, enum, const, anyOf/oneOf, multi-type arrays. Unsupported
+     *   keywords throw rather than silently under-constraining. Mutually
+     *   exclusive with `grammar`.
+     *
      * @param \Displace\Infer\Prompt $prompt
+     * @param array<string, mixed>   $options
      *
      * @throws \Displace\Infer\InferenceException If the model has been closed,
      *                                            has no embedded chat template,
      *                                            or fails to decode the prompt.
+     * @throws \Displace\Infer\InferException     On an invalid grammar/schema option.
      */
     public function chat(
         \Displace\Infer\Prompt $prompt,
@@ -207,6 +219,7 @@ class Model
         int $nCtx = 2048,
         float $temperature = 0.0,
         int $seed = 1234,
+        array $options = [],
     ): \Displace\Infer\Response {}
 
     /**
@@ -214,8 +227,13 @@ class Model
      * control over the prompt string — custom templates, base models, etc.
      * Returns the generated text as a plain string with no reasoning split.
      *
+     * `$options` accepts the same `grammar` / `schema` keys as `chat()`.
+     *
+     * @param array<string, mixed> $options
+     *
      * @throws \Displace\Infer\InferenceException If decoding or sampling fails,
      *                                            or if the model has been closed.
+     * @throws \Displace\Infer\InferException     On an invalid grammar/schema option.
      */
     public function raw(
         string $prompt,
@@ -224,6 +242,7 @@ class Model
         float $temperature = 0.0,
         int $seed = 1234,
         bool $addBos = true,
+        array $options = [],
     ): string {}
 
     /**
