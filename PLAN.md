@@ -37,6 +37,7 @@ matter." Project status / surface description lives in
 
 | Version | Date         | Notes                                                                                  |
 | ------- | ------------ | -------------------------------------------------------------------------------------- |
+| v0.2.0  | 2026-06-11   | Grammar/JSON-Schema constrained generation, `RerankModel` (Qwen3-Reranker), `Embedding::packed()`, THIRD-PARTY-NOTICES + `cargo about` manifest, prompt-batch sizing fix (512-token cap), sampler double-accept fix. |
 | v0.1.1  | 2026-06-07   | Fixes PIE install: in-archive file is `infer.so` on every platform (not `infer.dylib` on macOS). Packagist's immutability rules forced a version bump rather than a v0.1.0 retag. |
 | v0.1.0  | 2026-06-07   | First public release. Tarballs unusable via PIE due to `infer.dylib` naming on macOS — superseded by v0.1.1. |
 
