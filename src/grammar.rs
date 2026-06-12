@@ -95,9 +95,7 @@ impl Builder {
             "space" => r#"" "?"#,
             "string" => {
                 self.primitive("space");
-                concat!(
-                    r#""\"" ( [^"\\\x7F\x00-\x1F] | "\\" (["\\bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]) )* "\"" space"#
-                )
+                r#""\"" ( [^"\\\x7F\x00-\x1F] | "\\" (["\\bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]) )* "\"" space"#
             }
             "integer" => {
                 self.primitive("space");

@@ -2,7 +2,7 @@
 name          = "ext-infer"
 version       = "0.2.0"
 edition       = "2021"
-rust-version  = "1.88"
+rust-version  = "1.89"
 license       = "MIT"
 description   = "PHP 8.3+ native, in-process inference against local GGUF models via llama.cpp."
 repository    = "https://github.com/displace/ext-infer"
