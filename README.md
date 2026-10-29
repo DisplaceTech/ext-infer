@@ -9,12 +9,21 @@
   <a href="https://github.com/DisplaceTech/ext-infer/actions/workflows/ci.yml"><img src="https://github.com/DisplaceTech/ext-infer/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
   <a href="https://github.com/DisplaceTech/ext-infer/releases/latest"><img src="https://img.shields.io/github/v/release/DisplaceTech/ext-infer?sort=semver&include_prereleases" alt="Latest release" /></a>
   <img src="https://img.shields.io/badge/PHP-8.3%20%7C%208.4%20%7C%208.5-777BB4?logo=php&logoColor=white" alt="PHP 8.3 / 8.4 / 8.5" />
-  <img src="https://img.shields.io/badge/Status-pre--release-orange" alt="Pre-release" />
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green" alt="MIT License" /></a>
   <a href="https://infer.displace.tech"><img src="https://img.shields.io/badge/docs-infer.displace.tech-blue" alt="Documentation" /></a>
 </p>
 
 ---
+
+## Status
+
+Feature-complete for its scope. Maintained: dependency updates and
+new-model support ship as patch/minor releases — see the
+[CHANGELOG](CHANGELOG.md). Last verified: PHP 8.3/8.4/8.5 (NTS on macOS arm64 + Linux x86_64; ZTS 8.4/8.5 on Linux), `llama-cpp-2` 0.1.160 (llama.cpp, October 2026), Qwen3 0.6B reference models, 2026-10-29.
+
+Remaining ideas are tracked as [`future` issues](https://github.com/DisplaceTech/ext-infer/issues?q=is%3Aissue+is%3Aopen+label%3Afuture).
+**Co-maintainers welcome** — if you run this in production and want a
+say in where it goes, open an issue or a PR.
 
 ## What is ext-infer?
 
@@ -96,18 +105,52 @@ and deploys automatically on every push to `main`.
 | **PHP 8.4**    |      ✅     |      ✅      |      ✅     |    —    |
 | **PHP 8.5**    |      ✅     |      ✅      |      ✅     |    —    |
 
-ZTS is supported by design (the code is thread-safe), enabled in
-`composer.json`, and not yet exercised in CI. Windows is intentionally
-out of scope for v0.1.
+ZTS is supported by design (the code is thread-safe) and enabled in
+`composer.json`; CI runs the PHPT suite on ZTS PHP 8.4 and 8.5 (Linux)
+every week. Prebuilt release binaries are NTS; ZTS installs build from
+source through PIE. Windows is intentionally out of scope.
 
 ## Roadmap
 
-**Shipped** &nbsp; chat completions · raw completions · grammar/JSON-Schema constrained generation · embeddings (+ packed float32 output) · `RerankModel` · reasoning split · typed exceptions · PHPT suite · CI matrix · PIE-compatible `composer.json` · tag-triggered binary release workflow · THIRD-PARTY-NOTICES + `cargo about` license manifest.
+**Shipped** &nbsp; chat completions · raw completions · grammar/JSON-Schema constrained generation · embeddings (+ packed float32 output) · `RerankModel` · reasoning split · typed exceptions · PHPT suite · CI matrix · PIE-compatible `composer.json` · tag-triggered binary release workflow · THIRD-PARTY-NOTICES + `cargo about` license manifest · a current llama.cpp with newer architectures (0.2.1).
 
-**Next (v0.3+)** &nbsp; streaming completions · KV-cache reuse via reusable `Session` objects · stop-string support · LoRA adapters · tool calling · Apple Metal default on macos-arm64.
+**Remaining ideas** live as [`future` issues](https://github.com/DisplaceTech/ext-infer/issues?q=is%3Aissue+is%3Aopen+label%3Afuture), each with its reasoning and any locked constraint (streaming, for one, is deliberately v0.3+). [`PLAN.md`](PLAN.md) holds the design notes and decision history; [`RELEASE.md`](RELEASE.md) is the cut-a-release flow.
 
-See [`PLAN.md`](PLAN.md) for the current planning doc and [`RELEASE.md`](RELEASE.md)
-for the cut-a-release flow.
+## Deliberately out of scope
+
+**Training and fine-tuning** · **GPU-first serving** (CPU is the
+portable default; Metal is opt-in) · **frontier-model-class inference**
+— the target is small local models on a 4GB+ box · **an orchestration
+framework** — chains and agents belong to the frameworks integrating
+[ai-contracts](https://github.com/DisplaceTech/ai-contracts) ·
+**Windows**. (Platform-wide non-goals; see the umbrella
+ARCHITECTURE.md.)
+
+## Part of a stack
+
+Transcribe → chunk → embed → search → answer, entirely on your hardware:
+
+| Stage | Package | What it does |
+| ----- | ------- | ------------ |
+| Transcribe | [ext-whisper](https://github.com/DisplaceTech/ext-whisper) | Speech-to-text over whisper.cpp |
+| Chunk | [ai-toolkit](https://github.com/DisplaceTech/ai-toolkit) | Text chunkers and packed-vector math, pure PHP |
+| Embed · rerank · answer | **ext-infer** (this repo) | Local LLM chat, embeddings and reranking over llama.cpp |
+| Search | [ext-turbovec](https://github.com/DisplaceTech/ext-turbovec) | Compressed in-memory vector search (TurboQuant) |
+| Integrate | [ai-contracts](https://github.com/DisplaceTech/ai-contracts) | The interfaces frameworks code against |
+| Reference app | [rag-over-markdown](https://github.com/DisplaceTech/rag-over-markdown) | The whole pipeline over a folder of markdown |
+
+Every package links the others; the extensions share one scaffold,
+[ext-template](https://github.com/DisplaceTech/ext-template).
+
+## Writing about this
+
+- [ext-infer: Local LLM Inference, Natively in PHP](https://eric.mann.blog/ext-infer-local-llm-inference-php/)
+- [The Case for Local AI: Keep Your Data and Your Models Close](https://eric.mann.blog/case-for-local-ai/)
+- [Meaning as Geometry: What Embeddings Actually Are](https://eric.mann.blog/meaning-as-geometry-what-embeddings-actually-are/)
+- [From Voice to Vectors: Building a Searchable Audio Archive in PHP](https://eric.mann.blog/voice-to-vectors-audio-search-php/)
+
+The stack's launch series ran Sept 22 – Oct 1, 2026; everything else
+is at [eric.mann.blog/writing](https://eric.mann.blog/writing/).
 
 ## License
 

@@ -134,10 +134,11 @@ runs on every push and PR:
 
 What CI does **not** do:
 
-- Run model-gated PHPT tests. Adding a fixture model to CI is on the
-  [roadmap](https://github.com/DisplaceTech/ext-infer/blob/main/PLAN.md);
-  for now, run them locally before tagging.
-- Exercise ZTS PHP. See [Threading & ZTS](../advanced/threading.md#future-work).
+- Run model-gated PHPT tests (CI stays model-free by design); run them
+  locally with `INFER_TEST_MODEL` / `INFER_TEST_RERANK_MODEL` before
+  tagging.
+- Stress-test ZTS with `parallel`: CI runs the suite on ZTS PHP 8.4/8.5,
+  but not concurrently ([#12](https://github.com/DisplaceTech/ext-infer/issues/12)).
 
 ## Pre-flight checklist
 

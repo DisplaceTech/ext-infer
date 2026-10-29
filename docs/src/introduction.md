@@ -51,6 +51,16 @@ Remaining ideas are tracked as
 [`PLAN.md`](https://github.com/DisplaceTech/ext-infer/blob/main/PLAN.md)
 holds the design notes and decision history.
 
+## Writing about this
+
+- [ext-infer: Local LLM Inference, Natively in PHP](https://eric.mann.blog/ext-infer-local-llm-inference-php/)
+- [The Case for Local AI: Keep Your Data and Your Models Close](https://eric.mann.blog/case-for-local-ai/)
+- [Meaning as Geometry: What Embeddings Actually Are](https://eric.mann.blog/meaning-as-geometry-what-embeddings-actually-are/)
+- [From Voice to Vectors: Building a Searchable Audio Archive in PHP](https://eric.mann.blog/voice-to-vectors-audio-search-php/)
+
+The stack's launch series ran Sept 22 – Oct 1, 2026; everything else
+is at [eric.mann.blog/writing](https://eric.mann.blog/writing/).
+
 ## Conventions in this guide
 
 - **Code blocks** are runnable as written, with one exception: PHP code

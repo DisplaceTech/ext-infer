@@ -158,21 +158,20 @@ $model->close();
 If this works, you have concurrent inference. If it crashes — please
 [open an issue](https://github.com/DisplaceTech/ext-infer/issues) with
 the model name, PHP version, build flags, and the crash output. CI
-doesn't exercise this path yet, so user reports are the canary.
+runs the PHPT suite on ZTS PHP but not this concurrent path, so user
+reports are the canary.
 
 ## Future work
 
-Two threading-related items on the roadmap:
+Two threading-related items, tracked as `future` issues:
 
-### CI exercise for ZTS
+### A concurrent ZTS stress test
 
-Add a `parallel`-driven stress test to CI. Today the matrix only
-covers NTS. Adding ZTS will require:
-
-- Building a ZTS-PHP runner image (the maintainers haven't picked
-  one yet).
-- Adding a ZTS leg to `ci.yml` and the release matrix in
-  `release.yml`.
+CI runs the PHPT suite on ZTS PHP 8.4 and 8.5 (Linux, via setup-php's
+`phpts: ts`) as of 0.2.1. Still open: a `parallel`-driven stress test
+that runs N concurrent `chat()` calls on one `Model`
+([#12](https://github.com/DisplaceTech/ext-infer/issues/12)), and prebuilt ZTS release binaries
+([ext-template#3](https://github.com/DisplaceTech/ext-template/issues/3)).
 
 ### Reusable session contexts
 
@@ -180,7 +179,7 @@ Today, every `chat()` call rebuilds the `LlamaContext` from scratch.
 That drops the KV cache, so multi-turn conversations re-prefill on
 every turn. A `Session` abstraction that owns a long-lived context
 would let users opt into KV-cache reuse for back-to-back turns of the
-same conversation. Tracked in [`PLAN.md`](https://github.com/DisplaceTech/ext-infer/blob/main/PLAN.md).
+same conversation. Tracked in [#4](https://github.com/DisplaceTech/ext-infer/issues/4).
 
 This wouldn't change the thread-safety story — each `Session` would
 be owned by one thread (or guarded by a mutex if shared) — but it
