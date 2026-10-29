@@ -48,8 +48,9 @@ use llama_cpp_2::context::params::{LlamaContextParams, LlamaPoolingType};
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::{AddBos, LlamaChatMessage, LlamaModel};
+use llama_cpp_2::model::{LlamaChatMessage, LlamaModel};
 use llama_cpp_2::sampling::LlamaSampler;
+use llama_cpp_2::token::LlamaToken;
 
 use crate::embedding::Embedding;
 use crate::error::InferError;
@@ -364,6 +365,30 @@ impl Model {
     }
 }
 
+// --- Tokenization -----------------------------------------------------------
+
+/// Tokenize `text` with special-token parsing on (chat templates and the
+/// reranker prompt carry `<|im_start|>`-style markers that must map to
+/// their control tokens), prepending BOS only when `add_bos` is set.
+///
+/// llama-cpp-2 >= 0.1.15x tokenizes raw bytes, so an interior NUL is no
+/// longer rejected on the way to llama.cpp. ext-infer keeps refusing it,
+/// with the same message the older `CString`-based path produced: a NUL
+/// in a prompt is almost always a caller bug (binary data passed as
+/// text), and silently tokenizing it would change long-standing behavior.
+pub(crate) fn tokenize(
+    model: &LlamaModel,
+    text: &str,
+    add_bos: bool,
+) -> Result<Vec<LlamaToken>, String> {
+    if let Some(pos) = text.bytes().position(|b| b == 0) {
+        return Err(format!(
+            "nul byte found in provided data at position: {pos}"
+        ));
+    }
+    Ok(model.vocab().tokenize(text.as_bytes(), add_bos, true))
+}
+
 // --- Inference core ---------------------------------------------------------
 
 struct RunOpts {
@@ -402,13 +427,7 @@ fn run_completion(
         .new_context(backend, ctx_params)
         .map_err(|e| InferError::Inference(format!("context creation failed: {e}")))?;
 
-    let add_bos = if opts.add_bos {
-        AddBos::Always
-    } else {
-        AddBos::Never
-    };
-    let prompt_tokens = model
-        .str_to_token(prompt, add_bos)
+    let prompt_tokens = tokenize(model, prompt, opts.add_bos)
         .map_err(|e| InferError::Inference(format!("tokenization failed: {e}")))?;
 
     if prompt_tokens.is_empty() {
@@ -476,6 +495,7 @@ fn run_completion(
         ]),
     };
 
+    let vocab = model.vocab();
     let mut out_bytes: Vec<u8> = Vec::new();
     let mut n_cur = batch.n_tokens();
     let mut n_decoded: u32 = 0;
@@ -494,14 +514,13 @@ fn run_completion(
         // output until llama.cpp aborts on `GGML_ASSERT(!stacks.empty())`.
         let token = sampler.sample(&ctx, batch.n_tokens() - 1);
 
-        if model.is_eog_token(token) {
+        if vocab.is_eog(token) {
             break FinishReason::Eos;
         }
 
-        let piece = model
-            .token_to_piece_bytes(token, 32, false, None)
-            .map_err(|e| InferError::Inference(format!("detokenize failed: {e}")))?;
-        out_bytes.extend_from_slice(&piece);
+        // Grows its buffer as needed (the old fixed 32-byte buffer errored
+        // on longer pieces); a control token renders as zero bytes.
+        vocab.token_to_piece_into(token, &mut out_bytes, false, None);
 
         batch.clear();
         batch
@@ -551,8 +570,7 @@ fn run_embedding(
         .new_context(backend, ctx_params)
         .map_err(|e| InferError::Inference(format!("embedding context creation failed: {e}")))?;
 
-    let tokens = model
-        .str_to_token(text, AddBos::Always)
+    let tokens = tokenize(model, text, true)
         .map_err(|e| InferError::Inference(format!("tokenization failed: {e}")))?;
 
     if tokens.is_empty() {

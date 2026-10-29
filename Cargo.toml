@@ -15,7 +15,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 ext-php-rs = "=0.16.3"
-llama-cpp-2 = "=0.1.146"
+llama-cpp-2 = "=0.1.160"
 serde_json = { version = "=1.0.150", features = ["preserve_order"] }
 thiserror  = "=2.0.21"
 

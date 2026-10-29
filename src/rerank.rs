@@ -45,11 +45,11 @@ use ext_php_rs::types::ZendHashTable;
 use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::{AddBos, LlamaModel};
+use llama_cpp_2::model::LlamaModel;
 use llama_cpp_2::token::LlamaToken;
 
 use crate::error::InferError;
-use crate::model::{backend, get_bool, get_string, get_uint};
+use crate::model::{backend, get_bool, get_string, get_uint, tokenize};
 
 /// The instruction baked into the judgment prompt when the caller doesn't
 /// supply one — the default the Qwen3-Reranker card trains against.
@@ -226,8 +226,7 @@ impl RerankModel {
             .map_err(|e| InferError::Inference(format!("rerank context creation failed: {e}")))?;
 
         // The template carries its own <|im_start|> framing — no BOS.
-        let tokens = model
-            .str_to_token(&prompt, AddBos::Never)
+        let tokens = tokenize(model, &prompt, false)
             .map_err(|e| InferError::Inference(format!("tokenization failed: {e}")))?;
         let token_count = i32::try_from(tokens.len())
             .map_err(|_| InferError::Inference("prompt token count overflows i32".into()))?;
@@ -268,8 +267,7 @@ impl RerankModel {
 /// Resolve `text` to exactly one vocabulary token id, or explain why this
 /// model can't be used for yes/no logit scoring.
 fn single_token(model: &LlamaModel, text: &str) -> Result<i32, InferError> {
-    let tokens: Vec<LlamaToken> = model
-        .str_to_token(text, AddBos::Never)
+    let tokens: Vec<LlamaToken> = tokenize(model, text, false)
         .map_err(|e| InferError::ModelLoad(format!("cannot tokenize {text:?}: {e}")))?;
     match tokens.as_slice() {
         [only] => Ok(only.0),
