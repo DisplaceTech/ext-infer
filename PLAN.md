@@ -96,9 +96,11 @@ several minutes on a fresh CI runner. We use `Swatinem/rust-cache@v2`
 keyed on PHP version and thread-safety mode to keep warm-cache builds
 under a minute per leg. The pin is exact and moves deliberately;
 ext-template's upstream watcher opens an issue when crates.io moves
-ahead. llama-cpp-sys-2 derives ggml's SIMD flags from Rust target
-features, and ext-infer sets no `target-cpu`, so x86_64 builds use the
-SSE2 baseline ([#13](https://github.com/DisplaceTech/ext-infer/issues/13)).
+ahead. llama-cpp-sys-2 defines `GGML_NATIVE=OFF`, which selects ggml's
+portable AVX/AVX2/FMA defaults (no AVX-512), so x86_64 binaries run on
+any x86-64-v3 CPU regardless of the build runner. Prompt-processing
+throughput is an open question
+([#13](https://github.com/DisplaceTech/ext-infer/issues/13)).
 
 ### `spl_ce_RuntimeException`
 
