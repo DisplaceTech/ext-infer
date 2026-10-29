@@ -12,11 +12,11 @@ static analyzers like PHPStan), see
 ## `Displace\Infer\Model`
 
 ```php
-final class Model
+class Model
 {
     public static function load(
         string $path,
-        array  $options = [],
+        ?array  $options = null,
     ): self;
 
     public function chat(
@@ -25,7 +25,7 @@ final class Model
         int   $nCtx        = 2048,
         float $temperature = 0.0,
         int   $seed        = 1234,
-        array $options     = [],   // ['grammar' => gbnf] xor ['schema' => jsonSchema]
+        ?array $options     = null,   // ['grammar' => gbnf] xor ['schema' => jsonSchema]
     ): \Displace\Infer\Response;
 
     public function raw(
@@ -35,7 +35,7 @@ final class Model
         float  $temperature = 0.0,
         int    $seed        = 1234,
         bool   $addBos      = true,
-        array  $options     = [],  // same grammar/schema keys as chat()
+        ?array  $options     = null,  // same grammar/schema keys as chat()
     ): string;
 
     public function embed(
@@ -58,11 +58,11 @@ and [Options reference](../guide/options.md).
 ## `Displace\Infer\RerankModel`
 
 ```php
-final class RerankModel
+class RerankModel
 {
     public static function load(
         string $path,
-        array  $options = [],  // n_gpu_layers, use_mmap, use_mlock, n_ctx, instruction
+        ?array  $options = null,  // n_gpu_layers, use_mmap, use_mlock, n_ctx, instruction
     ): self;
 
     public function score(string $query, string $document): float;  // (0, 1)
@@ -85,7 +85,7 @@ Qwen3-Reranker GGUF family; `rank()`'s rows are shaped like
 ## `Displace\Infer\Prompt`
 
 ```php
-final class Prompt
+class Prompt
 {
     public static function system(string $content): self;
     public static function user(string $content): self;
@@ -109,7 +109,7 @@ Immutable. `new Prompt()` throws — use a factory. See
 ## `Displace\Infer\Message`
 
 ```php
-final class Message
+class Message
 {
     public function role(): string;    // 'system' | 'user' | 'assistant'
     public function content(): string;
@@ -121,7 +121,7 @@ Read-only. Constructed only by `Prompt`; `new Message()` throws.
 ## `Displace\Infer\Response`
 
 ```php
-final class Response
+class Response
 {
     public function text(): string;
     public function reasoning(): ?string;
@@ -138,7 +138,7 @@ throws. See [Chat completions](../guide/chat.md#inspecting-a-response).
 ## `Displace\Infer\Embedding`
 
 ```php
-final class Embedding
+class Embedding
 {
     /** @return list<float> */
     public function vector(): array;
