@@ -123,7 +123,7 @@ The most common message strings:
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
 | `model has been closed`                    | You called `chat()` after `$model->close()`. Reload the model.                                          |
 | `model has no embedded chat template`      | The GGUF is a base model, not an instruct/chat variant. Either pick a chat-tuned model or use [`Model::raw()`](./raw.md). |
-| `apply_chat_template failed`               | The chat template rendered but llama.cpp rejected the result. Usually means the message-role sequence is one the template doesn't support (e.g. multiple system messages). |
+| `apply_chat_template failed`               | llama.cpp couldn't render the prompt. Either the message-role sequence is one the template doesn't support (e.g. multiple system messages), or the model ships a Jinja template llama.cpp's built-in matcher doesn't recognise (`ffi error -1`, e.g. Spark-X2.5) — render it yourself and use [`Model::raw()`](./raw.md). |
 | `prompt is N tokens but n_ctx is only M`   | The rendered prompt is longer than `nCtx`. Bump `nCtx` or shorten the prompt. |
 | `chat message contains a null byte`        | A `Prompt`'s content has an embedded `\0`. Strip it before constructing the prompt. |
 
