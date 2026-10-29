@@ -4,7 +4,7 @@
 //
 // Regenerate from the registered classes after building:
 //
-//     make stubs   # wraps `cargo php stubs --stubs stubs/infer.stubs.php`
+//     make stubs   # writes target/infer.stubs.php — diff it against this file
 
 namespace Displace\Infer;
 

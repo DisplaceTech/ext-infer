@@ -69,8 +69,10 @@ INFER_TEST_MODEL=$PWD/models/Qwen3-0.6B-Q8_0.gguf make test
 # composer.json shape
 composer validate composer.json
 
-# Optional: regenerate IDE stubs and diff against the committed copy
-make stubs && git diff stubs/infer.stubs.php
+# Signature check: generate stubs from the build and diff against the
+# curated copy (Linux: add STUBS_PRELOAD=/path/to/libphp8.x.so — see the
+# Makefile). Any signature drift is a stop-and-decide.
+make stubs && diff -u stubs/infer.stubs.php target/infer.stubs.php
 ```
 
 If any of those fail, fix before tagging. The release workflow runs the

@@ -142,12 +142,15 @@ Stubs are hand-authored today because we want richer docblocks than
 the stub signatures match what's actually registered):
 
 ```sh
-make stubs
-git diff stubs/infer.stubs.php
+make stubs                       # writes target/infer.stubs.php
+diff -u stubs/infer.stubs.php target/infer.stubs.php
 ```
 
-Reconcile the generated output with the hand-authored version
-manually.
+`make stubs` never overwrites the hand-authored file; reconcile any
+signature difference manually. On Linux, cargo-php's `dlopen()` needs
+PHP's embed library preloaded:
+`make stubs STUBS_PRELOAD=/usr/lib/libphp8.4.so` (package
+`libphp8.4-embed` on Debian/Ubuntu). macOS needs nothing.
 
 ## Troubleshooting common build failures
 
