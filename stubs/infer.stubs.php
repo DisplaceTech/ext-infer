@@ -10,14 +10,20 @@ namespace Displace\Infer;
 
 class InferException extends \RuntimeException
 {
+    /** Not constructible from PHP — instances come from the extension. */
+    public function __construct() {}
 }
 
 class ModelLoadException extends \Displace\Infer\InferException
 {
+    /** Not constructible from PHP — instances come from the extension. */
+    public function __construct() {}
 }
 
 class InferenceException extends \Displace\Infer\InferException
 {
+    /** Not constructible from PHP — instances come from the extension. */
+    public function __construct() {}
 }
 
 /**
@@ -28,7 +34,7 @@ class InferenceException extends \Displace\Infer\InferException
  * Direct construction is refused — a vector built by PHP would lie about
  * which model produced it and what pooling strategy was applied.
  */
-final class Embedding
+class Embedding
 {
     /** @throws \Displace\Infer\InferException Always. */
     public function __construct() {}
@@ -57,7 +63,7 @@ final class Embedding
     public function norm(): float {}
 
     /** Return a new Embedding scaled to unit length (zero-vectors are returned unchanged). */
-    public function normalize(): self {}
+    public function normalize(): \Displace\Infer\Embedding {}
 
     /**
      * Cosine similarity against another embedding.
@@ -78,7 +84,7 @@ final class Embedding
  * Read-only. Instances are produced by `Model::chat()`; direct construction
  * throws `InferException`.
  */
-final class Response
+class Response
 {
     /** @throws \Displace\Infer\InferException Always. */
     public function __construct() {}
@@ -108,7 +114,7 @@ final class Response
  * Read-only. Instances are produced by the `Prompt` builder methods; direct
  * construction is refused (`new Message()` throws `InferException`).
  */
-final class Message
+class Message
 {
     /** @throws \Displace\Infer\InferException Always. */
     public function __construct() {}
@@ -136,25 +142,25 @@ final class Message
  * the model's embedded chat template — callers never need to write
  * `<|im_start|>` tokens by hand.
  */
-final class Prompt
+class Prompt
 {
     /** @throws \Displace\Infer\InferException Always — use `Prompt::system()` or `Prompt::user()`. */
     public function __construct() {}
 
     /** Start a prompt with a system message. */
-    public static function system(string $content): self {}
+    public static function system(string $content): \Displace\Infer\Prompt {}
 
     /** Start a prompt with a user message. */
-    public static function user(string $content): self {}
+    public static function user(string $content): \Displace\Infer\Prompt {}
 
     /** Return a new prompt with a system message appended. */
-    public function withSystem(string $content): self {}
+    public function withSystem(string $content): \Displace\Infer\Prompt {}
 
     /** Return a new prompt with a user message appended. */
-    public function withUser(string $content): self {}
+    public function withUser(string $content): \Displace\Infer\Prompt {}
 
     /** Return a new prompt with an assistant message appended (useful for replaying history). */
-    public function withAssistant(string $content): self {}
+    public function withAssistant(string $content): \Displace\Infer\Prompt {}
 
     /**
      * The messages in order.
@@ -205,7 +211,7 @@ class RerankModel
      *                                            model's vocabulary cannot express
      *                                            single-token yes/no answers.
      */
-    public static function load(string $path, array $options = []): self {}
+    public static function load(string $path, ?array $options = null): \Displace\Infer\RerankModel {}
 
     /**
      * Relevance of `$document` to `$query`, in (0, 1). Higher is more
@@ -249,7 +255,7 @@ class Model
      *
      * @throws \Displace\Infer\ModelLoadException If the file cannot be read or parsed.
      */
-    public static function load(string $path, array $options = []): self {}
+    public static function load(string $path, ?array $options = null): \Displace\Infer\Model {}
 
     /**
      * Run a chat completion against the loaded model.
@@ -282,7 +288,7 @@ class Model
         int $nCtx = 2048,
         float $temperature = 0.0,
         int $seed = 1234,
-        array $options = [],
+        ?array $options = null,
     ): \Displace\Infer\Response {}
 
     /**
@@ -305,7 +311,7 @@ class Model
         float $temperature = 0.0,
         int $seed = 1234,
         bool $addBos = true,
-        array $options = [],
+        ?array $options = null,
     ): string {}
 
     /**
@@ -328,4 +334,6 @@ class Model
      * Release the underlying model weights. Idempotent.
      */
     public function close(): void {}
+    /** Not constructible from PHP — instances come from the extension. */
+    public function __construct() {}
 }
