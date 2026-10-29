@@ -144,16 +144,14 @@ $model->close();
 
 - **ZTS PHP is uncommon.** Most distros ship NTS by default; you'll
   have to build ZTS PHP from source (`./configure --enable-zts`)
-  or use a ZTS-shipping Docker image. PIE's pre-built binaries
-  target NTS for v0.1; ZTS binaries are on the roadmap.
+  or use a ZTS-shipping Docker image. PIE's pre-built binaries are
+  NTS; on ZTS PHP, PIE builds from source.
 - **`parallel` itself requires ZTS.** Can't use it on a standard
   NTS install.
-- **CI doesn't exercise this yet.** ZTS support is enabled in
-  `composer.json` because the code is thread-safe by construction —
-  but the maintainers have not yet run multi-threaded stress tests in
-  CI. Treat it as "should work, please report bugs" until that
-  changes. See [Threading & ZTS](../advanced/threading.md) for the
-  current state.
+- **CI runs the PHPT suite on ZTS PHP** (8.4 and 8.5, Linux, weekly),
+  but not a multi-threaded `parallel` stress test yet
+  ([#12](https://github.com/DisplaceTech/ext-infer/issues/12)). Treat concurrent use as "should work, please
+  report bugs". See [Threading & ZTS](../advanced/threading.md).
 
 ## Choosing between the patterns
 
@@ -164,7 +162,7 @@ $model->close();
 | Survives PHP being NTS                 | ✅          | ✅          | ❌              |
 | Shares one model across all concurrency| via mmap    | per-worker  | within process |
 | Scales to many concurrent inferences   | ⚠️ workers eat RAM | ✅ horizontal | ⚠️ one process |
-| Production-tested in `ext-infer`       | ✅          | ✅          | ⚠️ unexercised |
+| Production-tested in `ext-infer`       | ✅          | ✅          | ⚠️ ZTS CI, no stress test |
 
 For most teams, **FPM with a generous `max_children`** is the right
 starting point. Move to a queue when latency variance gets too high

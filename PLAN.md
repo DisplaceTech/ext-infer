@@ -1,11 +1,16 @@
-# ext-infer — plan
+# ext-infer — design notes
 
-Living document. Each section answers "what's left, and why does it
-matter." Project status / surface description lives in
-[`README.md`](README.md); how-to-cut-a-release lives in
-[`RELEASE.md`](RELEASE.md).
+Design notes and decision history: why the surface looks the way it
+does, what was tried, and the constraints that bind future work. It is
+not a to-do list.
 
-## Status snapshot
+- Status and surface: [`README.md`](README.md)
+- What shipped, per release: [`CHANGELOG.md`](CHANGELOG.md)
+- Remaining work: [`future` issues](https://github.com/DisplaceTech/ext-infer/issues?q=is%3Aissue+is%3Aopen+label%3Afuture), one per idea, each carrying
+  the reasoning that used to live here
+- How to cut a release: [`RELEASE.md`](RELEASE.md)
+
+## Surface (as of 0.2.1)
 
 | Surface                                | Status   |
 | -------------------------------------- | -------- |
@@ -23,156 +28,77 @@ matter." Project status / surface description lives in
 | `Response` (reasoning/answer split)    | shipped  |
 | `Embedding` (vector math)              | shipped  |
 | `InferException` hierarchy             | shipped  |
-| PHPT suite (15 tests, model-gated where needed) | shipped  |
-| CI matrix (8.3/8.4/8.5 × {macos-arm64, ubuntu, ubuntu-arm64}) | shipped |
+| PHPT suite (16 tests, model-gated where needed) | shipped  |
+| CI matrix (8.3/8.4/8.5 × {macos-arm64, ubuntu}; weekly schedule) | shipped |
 | `composer.json` (PIE-compatible)       | shipped  |
-| Tag-triggered binary release workflow  | shipped, exercised through v0.1.0 |
+| Tag-triggered binary release workflow  | shipped, exercised through v0.2.0 |
 | `RELEASE.md`                           | shipped  |
 | `examples/` (3 examples + READMEs)     | shipped  |
 | Documentation site (infer.displace.tech) | shipped, ~20 mdbook pages |
-| Apple Metal feature                    | available, not default |
-| ZTS-PHP support                        | enabled in composer.json, untested in CI |
+| Apple Metal feature                    | available, not default ([#9](https://github.com/DisplaceTech/ext-infer/issues/9)) |
+| ZTS-PHP support                        | PHPT suite on ZTS 8.4/8.5 in CI (0.2.1); no concurrent stress test yet ([#12](https://github.com/DisplaceTech/ext-infer/issues/12)) |
 
 ## Releases
 
+Details per release live in [`CHANGELOG.md`](CHANGELOG.md); this table is the one-line history.
+
 | Version | Date         | Notes                                                                                  |
 | ------- | ------------ | -------------------------------------------------------------------------------------- |
+| v0.2.1  | unreleased   | llama-cpp-2 0.1.160 (October 2026 llama.cpp; Nanbeige4.2 / Spark-X2.5 load), ext-php-rs 0.16.3, long-prompt abort fix (`n_batch` = `n_ctx`). |
 | v0.2.0  | 2026-06-11   | Grammar/JSON-Schema constrained generation, `RerankModel` (Qwen3-Reranker), `Embedding::packed()`, THIRD-PARTY-NOTICES + `cargo about` manifest, prompt-batch sizing fix (512-token cap), sampler double-accept fix. |
 | v0.1.1  | 2026-06-07   | Fixes PIE install: in-archive file is `infer.so` on every platform (not `infer.dylib` on macOS). Packagist's immutability rules forced a version bump rather than a v0.1.0 retag. |
 | v0.1.0  | 2026-06-07   | First public release. Tarballs unusable via PIE due to `infer.dylib` naming on macOS — superseded by v0.1.1. |
 
-## Up next
+## Remaining work
 
-### ZTS exercise
+Tracked as [`future` issues](https://github.com/DisplaceTech/ext-infer/issues?q=is%3Aissue+is%3Aopen+label%3Afuture); the design reasoning moved into each
+issue's body. Roughly in roadmap order:
 
-ZTS support is declared in `composer.json` because the code is
-thread-safe by design — but neither the CI matrix nor the release
-matrix builds against a ZTS-PHP runner today.
+- [#3](https://github.com/DisplaceTech/ext-infer/issues/3) Streaming completions (**deliberately v0.3+**)
+- [#4](https://github.com/DisplaceTech/ext-infer/issues/4) Session / KV-cache reuse
+- [#5](https://github.com/DisplaceTech/ext-infer/issues/5) Stop-string support
+- [#6](https://github.com/DisplaceTech/ext-infer/issues/6) LoRA adapters
+- [#7](https://github.com/DisplaceTech/ext-infer/issues/7) Multimodal (mmproj) input
+- [#8](https://github.com/DisplaceTech/ext-infer/issues/8) Tool calling (now depends on #2)
+- [#2](https://github.com/DisplaceTech/ext-infer/issues/2) Jinja chat-template rendering for templates llama.cpp's matcher doesn't know
+- [#9](https://github.com/DisplaceTech/ext-infer/issues/9) Apple Metal by default on macOS arm64
+- [#10](https://github.com/DisplaceTech/ext-infer/issues/10) Continuous batching
+- [#11](https://github.com/DisplaceTech/ext-infer/issues/11) Tokenizer utilities (on demand)
+- [#12](https://github.com/DisplaceTech/ext-infer/issues/12) ZTS concurrent stress test
+- [#13](https://github.com/DisplaceTech/ext-infer/issues/13) x86_64 prompt-processing throughput
+- [#14](https://github.com/DisplaceTech/ext-infer/issues/14) Exceptions report an empty file / line 0
 
-- [ ] Add an `ubuntu-latest` ZTS leg to `ci.yml`. Will need a custom
-      PHP install (apt's `php-zts` package, or
-      [`shivammathur/setup-php`](https://github.com/shivammathur/setup-php)
-      if it has grown a `ts: true` option since we last checked).
-- [ ] Once green, add ZTS legs to `release.yml` so PIE can serve the
-      right tarball to ZTS users.
-- [ ] Stress test: a `parallel\Runtime` script that loads one `Model`
-      and runs N concurrent `chat()` calls. Verify no crash, no
-      response cross-contamination.
+## Decisions
 
-### macOS Metal default
-
-`make release FEATURES=metal` already works. Two things gate making it
-the default for macos-arm64 release tarballs:
-
-- [ ] Verify the macos-14 GitHub runner's hardware actually
-      benefits from Metal (the runner family changes; some
-      revisions have GPU support and others don't).
-- [ ] Decide what to ship: a Metal-only macos arm64 tarball, or two
-      tarballs (`-metal` suffix + plain CPU) and let PIE pick. The
-      filename convention can carry a `Debug`/`TSMode` token but
-      doesn't have a slot for "accel"; we'd likely encode it in the
-      `Debug` field (`metal` vs unset).
-
-### Stop-string support
-
-Common LLM API feature. `chat()` and `raw()` would accept a
-`stop: string|array<string>` named arg; generation halts the moment
-any stop-string appears in the decoded output and that prefix is
-returned. Useful for:
-
-- early-termination on a known delimiter (`"###"`, `"\n\n"`)
-- letting users define their own structured templates in `raw()`
-  mode
-
-Open question: does the truncation happen at the stop-string boundary
-(strict), or include the stop-string (lenient)? OpenAI excludes it;
-Anthropic excludes it; llama-cli includes it. Pick strict for
-consistency with the dominant API surface.
-
-### Streaming completions
-
-Long-running `chat()` calls are unfriendly in a request/response web
-context. Two viable surfaces:
-
-- **Generator-returning**: `Model::chatStream(Prompt, …): Generator`
-  yielding `Response`-like fragments (incremental `text`, with the
-  final fragment carrying `finishReason` + `tokensGenerated`).
-- **Callback-returning**: `Model::chat(Prompt, …, ?Closure $onToken):
-  Response` where each emitted token piece is sent through the
-  closure; the closure returns `bool` to allow caller-driven
-  cancellation.
-
-Pick before implementing. Generators are more PHP-native; callbacks
-are easier to bridge into async runtimes (`ReactPHP`, `Swoole`,
-worker pools).
-
-Implementation-wise this is moderate: today's decode loop in
-`run_completion` already emits one token at a time — the change is
-flushing each piece outward instead of accumulating it.
-
-### Session / KV-cache reuse
-
-Today every `chat()` call constructs a fresh `LlamaContext`. That
-costs ~tens-of-ms even for cached weights, and worse, it drops the
-KV cache, so multi-turn conversations re-prefill from scratch on
-every turn. A `Session` object that owns a long-lived context would
-make multi-turn chat dramatically faster.
-
-API sketch:
-
-```php
-$session = $model->newSession();   // wraps a LlamaContext
-$r1 = $session->chat($prompt->withUser('hi'));
-$r2 = $session->chat($prompt->withUser('hi')->withAssistant($r1->answer())
-                            ->withUser('and another thing'));
-// On the second call, the prefix matching ($prompt + 'hi' + assistant
-// reply) is already in the KV cache — only the new user message
-// needs to be tokenized + decoded.
-$session->close();
-```
-
-Open question: do we expose a single `Session` per model, or allow
-parallel sessions (one per "conversation")? Latter is the realistic
-shape — a chatbot serving many users needs one session per user.
-
-### Tool calling
-
-Models that ship tool-calling support (Qwen3, Llama 3.1+, Mistral
-Nemo, etc.) have specific chat-template extensions that emit
-function-call tokens. `llama-cpp-2` exposes `apply_chat_template_with_tools_oaicompat`
-for this. Wrapping it would let PHP code register tool definitions
-and dispatch on the resulting parsed call.
-
-Bigger undertaking than the rest of this list. Sequence after
-sessions land.
-
-### Continuous batching
-
-For worker scenarios (LLM inference as a service backed by FPM),
-processing one request at a time leaves a lot of throughput on the
-table. llama.cpp supports continuous batching natively; exposing it
-to PHP would require a different surface (likely something like
-`Model::batchChat(array<Prompt>): array<Response>`).
-
-Probably the last item on the list — it ties into the streaming and
-session decisions and shouldn't be designed in isolation.
+| Date | Decision | Why |
+| ---- | -------- | --- |
+| 2026-10-29 | Context `n_batch` = `n_ctx` for completion, rerank and embedding contexts. | llama.cpp aborts the process (`GGML_ASSERT`) when one batch exceeds `n_batch` (default 2048); ext-infer decodes the whole prompt as one batch. `n_ubatch` keeps its default, so memory is unchanged. |
+| 2026-10-29 | Keep rejecting NUL bytes in prompts after llama-cpp-2 moved to byte-slice tokenization. | Unchanged behaviour across the upgrade; a NUL in a prompt is almost always binary data passed as text. |
+| 2026-10-29 | No Jinja renderer in 0.2.1, even though Spark-X2.5's template needs one. | It would change prompt rendering (and golden outputs) for models that work today; it's a feature with a dependency decision, not a patch ([#2](https://github.com/DisplaceTech/ext-infer/issues/2)). |
+| 2026-06-11 | Streaming deferred to v0.3+. | Callback→generator bridging is fiddly; the embed/search/classify/extract core doesn't need it (umbrella ARCHITECTURE.md). |
 
 ## Operational notes
 
 ### `ext-php-rs` is pre-1.0
 
-We pin exact versions in `Cargo.toml` (currently 0.15.13). The
-`#[php(extends(...))]` and `#[php(defaults(...))]` macro syntaxes are
-recent additions; both work in 0.15.13 but may shift in 0.16. Pin
-deliberately on each ext-php-rs bump and run the full PHPT suite
-before merging.
+The pin lives in ext-template's `template/versions.conf` (currently
+`=0.16.3`) and cascades through `bin/sync`. 0.16 converts
+`#[php(defaults(...))]` values into the parameter type, so non-`i32`
+numeric defaults need typed literals (`128_u32`, `0.0_f32`). On every
+bump: diff a Reflection dump of the extension before/after, regenerate
+stubs (`make stubs`) and diff them, and run the full PHPT suite with
+models.
 
 ### `llama-cpp-2` builds llama.cpp from source
 
 Cold CI builds are ~25 seconds on a developer M-series laptop and
 several minutes on a fresh CI runner. We use `Swatinem/rust-cache@v2`
-with `key: php-${{ matrix.php }}` to keep warm-cache builds under a
-minute per leg.
+keyed on PHP version and thread-safety mode to keep warm-cache builds
+under a minute per leg. The pin is exact and moves deliberately;
+ext-template's upstream watcher opens an issue when crates.io moves
+ahead. llama-cpp-sys-2 derives ggml's SIMD flags from Rust target
+features, and ext-infer sets no `target-cpu`, so x86_64 builds use the
+SSE2 baseline ([#13](https://github.com/DisplaceTech/ext-infer/issues/13)).
 
 ### `spl_ce_RuntimeException`
 

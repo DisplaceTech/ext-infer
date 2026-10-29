@@ -13,7 +13,7 @@ markdown files, indexed once into `sqlite-vec`, queried on demand.
 
 - An embedding model — [Qwen3-Embedding-0.6B](../guide/models.md#embedding-small-fast)
   works well.
-- A chat model — Qwen3-7B-Instruct or similar.
+- A chat model — Qwen3-8B (`Qwen/Qwen3-8B-GGUF`, `Q4_K_M`) or similar.
 - The [`sqlite-vec`](https://github.com/asg017/sqlite-vec) extension
   loaded into PHP's PDO SQLite (or use the `sqlite3` CLI tools).
 
@@ -126,7 +126,7 @@ use Displace\Infer\Prompt;
 $embedder = Model::load('models/Qwen3-Embedding-0.6B-Q8_0.gguf', [
     'embedding' => true,
 ]);
-$chat = Model::load('models/Qwen3-7B-Instruct-Q4_K_M.gguf');
+$chat = Model::load('models/Qwen3-8B-Q4_K_M.gguf');
 
 $pdo = new PDO('sqlite:rag.db');
 $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);

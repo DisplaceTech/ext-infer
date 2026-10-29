@@ -77,7 +77,7 @@ pinning a dev branch.
 - Post-publish smoke test (install via PIE, run hello-world).
 - Hotfix / patch process.
 - Yanking a broken release.
-- Caveats (Windows excluded, ZTS untested, etc.).
+- Caveats (Windows excluded, NTS-only binaries, etc.).
 - Symptom → first-thing-to-check table for release failures.
 
 If you're cutting a release, **read `RELEASE.md` first**. This page is
@@ -85,15 +85,15 @@ the index, not the manual.
 
 ## Caveats
 
-Three things v0.1 explicitly doesn't ship and that you should know
+Three things releases explicitly don't ship and that you should know
 about before cutting one:
 
 - **No Windows binaries.** `os-families-exclude: ["windows"]` in
   `composer.json` makes PIE skip Windows hosts cleanly.
 - **No ZTS binaries.** The composer.json declares `support-zts: true`
-  because the code is thread-safe by construction, but the release
-  matrix doesn't include a ZTS runner. ZTS users need to build from
-  source for now.
+  and CI runs the PHPT suite on ZTS PHP 8.4/8.5, but the release matrix
+  is NTS-only, so ZTS users build from source through PIE
+  ([ext-template#3](https://github.com/DisplaceTech/ext-template/issues/3)).
 - **No musl Linux binaries.** The release matrix is glibc only.
   Musl users build from source; the `.cargo/config.toml` carries the
   needed `crt-static` opt-out.

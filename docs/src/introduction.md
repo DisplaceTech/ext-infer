@@ -43,11 +43,23 @@ This guide is split into five layers, navigable from the sidebar:
 
 ## Status
 
-`ext-infer` is **pre-release** — the class surface is stable but the
-first tagged release (`v0.1.0`) is still in flight. See
-[`RELEASE.md`](https://github.com/DisplaceTech/ext-infer/blob/main/RELEASE.md)
-for the cut-a-release flow and [`PLAN.md`](https://github.com/DisplaceTech/ext-infer/blob/main/PLAN.md)
-for what's coming next.
+`ext-infer` is **feature-complete for its scope and maintained**:
+dependency updates and new-model support ship as patch/minor releases
+([CHANGELOG](https://github.com/DisplaceTech/ext-infer/blob/main/CHANGELOG.md)).
+Remaining ideas are tracked as
+[`future` issues](https://github.com/DisplaceTech/ext-infer/issues?q=is%3Aissue+is%3Aopen+label%3Afuture);
+[`PLAN.md`](https://github.com/DisplaceTech/ext-infer/blob/main/PLAN.md)
+holds the design notes and decision history.
+
+## Writing about this
+
+- [ext-infer: Local LLM Inference, Natively in PHP](https://eric.mann.blog/ext-infer-local-llm-inference-php/)
+- [The Case for Local AI: Keep Your Data and Your Models Close](https://eric.mann.blog/case-for-local-ai/)
+- [Meaning as Geometry: What Embeddings Actually Are](https://eric.mann.blog/meaning-as-geometry-what-embeddings-actually-are/)
+- [From Voice to Vectors: Building a Searchable Audio Archive in PHP](https://eric.mann.blog/voice-to-vectors-audio-search-php/)
+
+The stack's launch series ran Sept 22 – Oct 1, 2026; everything else
+is at [eric.mann.blog/writing](https://eric.mann.blog/writing/).
 
 ## Conventions in this guide
 

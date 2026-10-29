@@ -39,7 +39,7 @@ intended shape.
 | PHP build  | Status                                            | Notes                                                       |
 | ---------- | ------------------------------------------------- | ----------------------------------------------------------- |
 | NTS        | ✅ supported, the default                          | What every release binary targets today.                     |
-| ZTS        | ✅ supported (`support-zts: true` in `composer.json`) | Not yet exercised in CI. See [Threading & ZTS](../advanced/threading.md). |
+| ZTS        | ✅ supported (`support-zts: true` in `composer.json`) | PHPT suite runs on ZTS PHP 8.4/8.5 (Linux) in CI; release binaries are NTS-only. See [Threading & ZTS](../advanced/threading.md). |
 
 ## Acceleration backends
 
@@ -67,6 +67,10 @@ seen it produce sensible output" list.
 | Llama 3 / 3.1 / 3.2   | Chat completions. No reasoning.                   |
 | Mistral               | Chat completions.                                 |
 | BGE / E5 / GTE        | Embeddings.                                       |
+| Qwen3-Reranker        | `RerankModel` scoring and ranking.                |
+| Nanbeige4.2 (0.2.1+)  | Chat completions, reasoning split, `schema`.      |
+| Granite 4.2           | Chat completions, `schema`.                       |
+| Spark-X2.5 (0.2.1+)   | `raw()` only — Jinja-only chat template ([#2](https://github.com/DisplaceTech/ext-infer/issues/2)). |
 
 ## Versioning policy
 

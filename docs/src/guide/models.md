@@ -93,9 +93,27 @@ curl -L -o models/Qwen3-0.6B-Q8_0.gguf \
 
 ### Chat (production-ish)
 
-**`bartowski/Qwen3-7B-Instruct-GGUF`** at `Q4_K_M` (~4.4 GB) — same
-family, much better reasoning quality. Or **`bartowski/Llama-3.2-3B-Instruct-GGUF`**
+**`Qwen/Qwen3-8B-GGUF`** at `Q4_K_M` (~5.0 GB, official, Apache-2.0)
+— same family, much better reasoning quality. Or **`bartowski/Llama-3.2-3B-Instruct-GGUF`**
 at `Q4_K_M` (~1.9 GB) for a smaller, non-reasoning option.
+
+### Newer architectures (ext-infer 0.2.1+)
+
+0.2.1 bundles an October 2026 llama.cpp (0.2.0 shipped an April one), so
+architectures added since then load. Verified on 0.2.1, all failing to
+load on 0.2.0:
+
+| Model | Architecture (llama.cpp PR) | Verified |
+| ----- | --------------------------- | -------- |
+| **`bartowski/Nanbeige_Nanbeige4.2-3B-GGUF`** `Q4_K_M` (2.7 GB, Apache-2.0) | `nanbeige` ([#25994](https://github.com/ggml-org/llama.cpp/pull/25994), July 2026) | `chat()`, reasoning split, `schema` output |
+| **`XHToken/Spark-X2.5-1.7B-GGUF`** `Q4_K_M` (1.1 GB, Apache-2.0) | `spark2_5` ([#27868](https://github.com/ggml-org/llama.cpp/pull/27868), Sept 2026) | `raw()` only — see below |
+
+Spark-X2.5 ships a Jinja-only chat template that llama.cpp's built-in
+template matcher doesn't recognise, so `chat()` throws
+`apply_chat_template failed`. Render the prompt yourself and use
+[`raw()`](./raw.md) until ext-infer gains a Jinja renderer (tracked as a
+`future` issue). IBM's **`ibm-granite/granite-4.2-3b-GGUF`** (August
+2026, existing `granite` architecture) chats on both 0.2.0 and 0.2.1.
 
 ### Embedding (small, fast)
 
@@ -119,7 +137,7 @@ Alternative: **`CompendiumLabs/bge-small-en-v1.5-gguf`** — 384-dim,
   of quantized GGUFs for popular models. Reliable, consistent naming.
 - **[mradermacher](https://huggingface.co/mradermacher)** — ditto.
 - **The model's own official GGUF repo when one exists** (e.g.
-  `Qwen/Qwen3-7B-Instruct-GGUF`) — always the most trusted source.
+  `Qwen/Qwen3-8B-GGUF`) — always the most trusted source.
 
 ## License caveats
 

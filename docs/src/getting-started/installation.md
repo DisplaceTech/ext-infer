@@ -7,11 +7,6 @@ Two supported install paths:
 
 ## Via PIE
 
-> **Heads up:** PIE installation is wired up but the first published
-> release (`v0.1.0`) is still in flight. Until then, install from
-> source — the `pie install` flow becomes the recommended path the
-> moment we ship binaries.
-
 [PIE](https://github.com/php/pie) (PHP Installer for Extensions) is the
 official tool for installing PHP extensions from Composer-style
 metadata. Get it once:
