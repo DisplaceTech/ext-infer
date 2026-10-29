@@ -220,7 +220,12 @@ impl RerankModel {
 
         let backend = backend()?;
         let n_ctx = std::num::NonZeroU32::new(self.n_ctx).expect("validated at load");
-        let ctx_params = LlamaContextParams::default().with_n_ctx(Some(n_ctx));
+        // One decode per scoring call: n_batch must cover n_ctx (default
+        // 4096) or llama.cpp aborts on prompts past its 2048 default; see
+        // run_completion.
+        let ctx_params = LlamaContextParams::default()
+            .with_n_ctx(Some(n_ctx))
+            .with_n_batch(self.n_ctx);
         let mut ctx = model
             .new_context(backend, ctx_params)
             .map_err(|e| InferError::Inference(format!("rerank context creation failed: {e}")))?;

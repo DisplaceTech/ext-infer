@@ -422,7 +422,15 @@ fn run_completion(
         reason: "must be greater than zero".into(),
     })?;
 
-    let ctx_params = LlamaContextParams::default().with_n_ctx(Some(n_ctx));
+    // The whole prompt goes to llama_decode as one batch, and llama.cpp
+    // asserts (aborting the PHP process, not returning an error) when a
+    // batch exceeds the context's logical n_batch, which defaults to 2048.
+    // Size it to n_ctx: the prompt-length check below then bounds every
+    // decode. n_ubatch (the physical compute chunk) keeps its default, so
+    // compute-buffer memory is unchanged.
+    let ctx_params = LlamaContextParams::default()
+        .with_n_ctx(Some(n_ctx))
+        .with_n_batch(opts.n_ctx);
     let mut ctx = model
         .new_context(backend, ctx_params)
         .map_err(|e| InferError::Inference(format!("context creation failed: {e}")))?;
@@ -562,8 +570,12 @@ fn run_embedding(
     let backend = backend()?;
 
     let n_ctx_nz = NonZeroU32::new(EMBED_DEFAULT_N_CTX).expect("constant > 0");
+    // n_batch = n_ctx for the same reason as run_completion (one decode
+    // per input); explicit so a future EMBED_DEFAULT_N_CTX bump can't
+    // reintroduce the abort.
     let ctx_params = LlamaContextParams::default()
         .with_n_ctx(Some(n_ctx_nz))
+        .with_n_batch(EMBED_DEFAULT_N_CTX)
         .with_embeddings(true)
         .with_pooling_type(pooling);
     let mut ctx = model
