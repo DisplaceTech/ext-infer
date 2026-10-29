@@ -222,7 +222,12 @@ impl Model {
     ///   compiled to GBNF internally. The supported subset is documented
     ///   on the website; unsupported keywords throw rather than silently
     ///   under-constraining. Mutually exclusive with `grammar`.
-    #[php(defaults(maxTokens = 128, nCtx = 2048, temperature = 0.0, seed = 1234))]
+    #[php(defaults(
+        maxTokens = 128_u32,
+        nCtx = 2048_u32,
+        temperature = 0.0_f32,
+        seed = 1234_u32
+    ))]
     pub fn chat(
         &self,
         prompt: &Prompt,
@@ -292,10 +297,10 @@ impl Model {
     // changing the userland surface.
     #[allow(clippy::too_many_arguments)]
     #[php(defaults(
-        maxTokens = 128,
-        nCtx = 2048,
-        temperature = 0.0,
-        seed = 1234,
+        maxTokens = 128_u32,
+        nCtx = 2048_u32,
+        temperature = 0.0_f32,
+        seed = 1234_u32,
         addBos = true
     ))]
     pub fn raw(
